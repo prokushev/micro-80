@@ -2,7 +2,11 @@
 ; Обратный порт с ЮТ-88
 ; Оптимизация по размеру
 ; Убран прямой переход (не через точку входа) в МОНИТОР
-; todo Убрано использование системных переменных
+; todo Убрано использование системных переменных (Для МОНИТОРов, поддерживающих получение координат курсора)
+;
+; Для МИКРО-80 (Стандартный МОНИТОР) и ЮТ-88 (МОНИТОР-F) используется системная переменная EK_ADR = 0F75AH,
+; т.к. нет никакого способа получить значение координат курсора. МОНИТОР для МИКРО-80, совместимный с Радио-86РК,
+; работать с данным эмулятором терминала не будет.
 ;
 ; Таблица поддерживаемых кодов (+ означает наличие поддержки)
 ;
@@ -38,6 +42,8 @@
 		INCLUDE		CFG.INC
 
 		ORG			TERM
+
+EK_ADR	EQU			0F75AH		;  Текущий адрес экрана в позиции курсора
 
 		; Entry Point
 		; --- START PROC TERM ---
@@ -127,88 +133,88 @@ LF56B:	CP      48h             ; 'H' Cursor home
 
 		POP		HL
 
-LF575:  CP      4Ah             ; 'J' Clear to end of screen
-        JP      NZ,LF58A
-        LD      HL,(0F75Ah)
-        LD      A,0F0h
-        LD      B,20h           ; ' '
-LF581:  LD      (HL),B
-        INC     HL
-        CP      H
-        JP      NZ,LF581
-        JP      ExitEscSequence
+LF575:	CP      4Ah             ; 'J' Clear to end of screen
+		JP      NZ,LF58A
+		LD      HL,(EK_ADR)
+		LD      A,0F0h
+		LD      B,20h           ; ' '
+LF581:	LD      (HL),B
+		INC     HL
+		CP      H
+		JP      NZ,LF581
+		JP      ExitEscSequence
 
-LF58A:  CP      4Bh             ; 'K' Clear to end of line
-        JP      NZ,LF5A3
-        LD      HL,(0F75Ah)
-;        XOR     A				; Это зачем?
-        LD      A,L
-        AND     0C0h
-        ADD     A,40h           ; '@'
-        LD      B,20h           ; ' '
-LF59A:  LD      (HL),B
-        INC     HL
-        CP      L
-        JP      NZ,LF59A
-        JP      ExitEscSequence
+LF58A:	CP      4Bh             ; 'K' Clear to end of line
+		JP      NZ,LF5A3
+		LD      HL,(EK_ADR)
+;		XOR     A				; Это зачем?
+		LD      A,L
+		AND     0C0h
+		ADD     A,40h           ; '@'
+		LD      B,20h           ; ' '
+LF59A:	LD      (HL),B
+		INC     HL
+		CP      L
+		JP      NZ,LF59A
+		JP      ExitEscSequence
 
-LF5A3:  CP      59h             ; 'Y' Move cursor to position
-        JP      NZ,ExitEscSequence
-        LD      HL,(0F75Ah)
-        LD      DE,0F801h		; -7FFF
-        ADD     HL,DE
-        LD      (HL),00h
-        LD      A,02h
-        LD      (EscSequenceState),A
-        JP      ExitTerm
+LF5A3:	CP      59h             ; 'Y' Move cursor to position
+		JP      NZ,ExitEscSequence
+		LD      HL,(EK_ADR)
+		LD      DE,0F801h		; -7FFH
+		ADD     HL,DE
+		LD      (HL),00h
+		LD      A,02h
+		LD      (EscSequenceState),A
+		JP      ExitTerm
 
-LF5B9:  LD      A,C
-        CP      1Bh
-        JP      NZ,LF5C9
-        LD      A,01h
-        LD      (EscSequenceState),A
-        LD      C,1Fh
-        JP      PrintCAndExit
+LF5B9:	LD      A,C
+		CP      1Bh
+		JP      NZ,LF5C9
+		LD      A,01h
+		LD      (EscSequenceState),A
+		LD      C,1Fh
+		JP      PrintCAndExit
 
-LF5C9:  LD      A,(EscSequenceState)
-        CP      02h
-        JP      NZ,LF5E0
-        XOR     A
-        LD      A,C
-        SBC     A,20h           ; ' '
-        LD      (LF616),A
-        LD      A,03h
-        LD      (EscSequenceState),A
-        JP      ExitTerm
+LF5C9:	LD      A,(EscSequenceState)
+		CP      02h
+		JP      NZ,LF5E0
+		XOR     A
+		LD      A,C
+		SBC     A,20h           ; ' '
+		LD      (LF616),A
+		LD      A,03h
+		LD      (EscSequenceState),A
+		JP      ExitTerm
 
-LF5E0:  XOR     A
-        LD      A,C
-        SBC     A,20h           ; ' '
-        CP      3Fh             ; '?'
-        JP      C,LF5EB
-        LD      A,3Fh           ; '?'
-LF5EB:  LD      L,A
-        LD      A,(LF616)
-        RRCA
-        RRCA
-        LD      C,A
-        AND     0C0h
-        OR      L
-        LD      L,A
-        LD      A,C
-        AND     07h
-        OR      0E8h
-        LD      H,A
-        LD      (0F75Ah),HL
-        LD      DE,0F801h		; -07FFH
-        ADD     HL,DE
-        LD      (HL),80h
-		
-        ; --- START PROC ExitEscSequence ---
-ExitEscSequence:  XOR		A				; LD      A,00h
-        LD      (EscSequenceState),A
-        JP		ExitTerm
+LF5E0:	XOR     A
+		LD      A,C
+		SBC     A,20h           ; ' '
+		CP      3Fh             ; '?'
+		JP      C,LF5EB
+		LD      A,3Fh           ; '?'
+LF5EB:	LD      L,A
+		LD      A,(LF616)
+		RRCA
+		RRCA
+		LD      C,A
+		AND     0C0h
+		OR      L
+		LD      L,A
+		LD      A,C
+		AND     07h
+		OR      0E8h
+		LD      H,A
+		LD      (EK_ADR),HL
+		LD      DE,0F801h		; -07FFH
+		ADD     HL,DE
+		LD      (HL),80h
 
+		; --- START PROC ExitEscSequence ---
+ExitEscSequence:
+		XOR		A				; LD      A,00h
+		LD      (EscSequenceState),A
+		JP		ExitTerm
 
 EscSequenceState:
 		DB		00h
