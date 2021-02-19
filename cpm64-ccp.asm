@@ -19,6 +19,9 @@
 	cpu	8080
 
 	title	"console command processor (CCP), ver 2.0"
+	
+		INCLUDE		CFG.INC
+
 ;	assembly language version of the CP/M console command processor
 
 ;	version 2.2 February, 1980
@@ -33,8 +36,8 @@ _true	equ	~_false
 testing	equ	_false	;true if debugging
 
 
-	ifdef	origin
-	org	origin
+	ifdef	CCP
+	org	CCP
 bdosl	equ	$+800h		;bdos location
 	else
 	if	testing

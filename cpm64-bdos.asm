@@ -20,10 +20,14 @@
 
 	cpu	8080
 
+
 patch1	equ	1
 
 
 	title	"Bdos Interface, Bdos, Version 2.2 Feb, 1980"
+
+		INCLUDE		CFG.INC
+
 ;*****************************************************************
 ;*****************************************************************
 ;**                                                             **
@@ -46,8 +50,8 @@ on	equ	0ffffh
 off	equ	00000h
 test	equ	off
 
-	ifdef	origin
-	org	origin
+	ifdef	BDOS
+	org	BDOS
 	else
 	if	test
 	org	0dc00h
