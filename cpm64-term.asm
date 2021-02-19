@@ -35,59 +35,59 @@
 		CPU			8080
 		Z80SYNTAX	EXCLUSIVE
 
-		;INCLUDE		CFG.INC
+		INCLUDE		CFG.INC
 
-        ORG     0F500h
+		ORG			TERM
 
-        ; Entry Point
-        ; --- START PROC TERM ---
-TERM:   PUSH    HL
-        PUSH    BC
-        PUSH    DE
-        PUSH    AF
-        LD      A,(EscSequenceState)
-        CP      00h
-        JP      NZ,ProcessEscSequence
-		LD		HL, PrintCAndExit
-		PUSH	HL
-        LD      A,C
-        CP      20h             ; ' '
-        ;JP      NC,PrintCAndExit
-		RET		NC
-        CP      08h
-        ;JP      Z,PrintCAndExit
-		RET		Z
-        CP      0Ah
-        ;JP      Z,PrintCAndExit
-		RET		Z
-        CP      0Dh
-		;JP      Z,PrintCAndExit
-        RET		Z
-		POP		HL
-        CP      1Bh
-        JP      NZ,ExitTerm
-        LD      A,01h
-        LD      (EscSequenceState),A
+		; Entry Point
+		; --- START PROC TERM ---
+		PUSH		HL
+		PUSH		BC
+		PUSH		DE
+		PUSH		AF
+		LD			A,(EscSequenceState)
+		OR			A				; CP 00h
+		JP			NZ,ProcessEscSequence
+		LD			HL, PrintCAndExit
+		PUSH		HL
+		LD			A,C
+		CP			20h             ; ' '
+		;JP			NC,PrintCAndExit
+		RET			NC
+		CP			08h
+		;JP			Z,PrintCAndExit
+		RET			Z
+		CP			0Ah
+		;JP			Z,PrintCAndExit
+		RET			Z
+		CP			0Dh
+		;JP			Z,PrintCAndExit
+		RET			Z
+		POP			HL
+		CP			1Bh
+		JP			NZ,ExitTerm
+		LD			A,01h
+		LD			(EscSequenceState),A
 
-        ; --- START PROC ExitTerm ---
+		; --- START PROC ExitTerm ---
 ExitTerm:
-		POP     AF
-        POP     DE
-        POP     BC
-        POP     HL
-        RET
+		POP			AF
+		POP			DE
+		POP			BC
+		POP			HL
+		RET
 
 ProcessEscSequence:
-		LD      A,(EscSequenceState)
-        CP      01h
-        JP      NZ,LF5B9
-        LD      A,C
-        CP      41h             ; 'A' Cursor up
-        JP      NZ,LF543
-        LD      C,19h
+		LD			A,(EscSequenceState)
+		CP      01h
+		JP      NZ,LF5B9
+		LD      A,C
+		CP      41h             ; 'A' Cursor up
+		JP      NZ,LF543
+		LD      C,19h
 EndEscSeqPrintCAndExit:
 		XOR		A				; LD      A,00h
-        LD      (EscSequenceState),A
+		LD      (EscSequenceState),A
 PrintCAndExit:  ; JP      0FC47h			; todo Прямой вызов МОНИТОРА
 		CALL	0F809H
 		JP		ExitTerm
@@ -95,36 +95,36 @@ PrintCAndExit:  ; JP      0FC47h			; todo Прямой вызов МОНИТОР
 LF543:	LD		HL, EndEscSeqPrintCAndExit
 		PUSH	HL
 		CP      42h             ; 'B' Cursor down
-;        JP      NZ,LF54D
-        LD      C,1Ah
-;        JP      EndEscSeqPrintCAndExit
-        ;JP      Z, EndEscSeqPrintCAndExit
+;		JP      NZ,LF54D
+		LD      C,1Ah
+;		JP      EndEscSeqPrintCAndExit
+		;JP      Z, EndEscSeqPrintCAndExit
 		RET		Z
 
-LF54D:  CP      43h             ; 'C' Cursor right
-;        JP      NZ,LF557
-        LD      C,18h
-        ;JP      Z, EndEscSeqPrintCAndExit
+LF54D:	CP      43h             ; 'C' Cursor right
+;		JP      NZ,LF557
+		LD      C,18h
+		;JP      Z, EndEscSeqPrintCAndExit
 		RET		Z
 
-LF557:  CP      44h             ; 'D' Cursor left
-;        JP      NZ,LF561
-        LD      C,08h
-        ;JP      Z, EndEscSeqPrintCAndExit
+LF557:	CP      44h             ; 'D' Cursor left
+;		JP      NZ,LF561
+		LD      C,08h
+		;JP      Z, EndEscSeqPrintCAndExit
 		RET		Z
 
-LF561:  CP      45h             ; 'E' Clear Screen - расширение с Atari
-;        JP      NZ,LF56B
-        LD      C,1Fh
-        ;JP      Z, EndEscSeqPrintCAndExit
+LF561:	CP      45h             ; 'E' Clear Screen - расширение с Atari
+;		JP      NZ,LF56B
+		LD      C,1Fh
+		;JP      Z, EndEscSeqPrintCAndExit
 		RET		Z
 
-LF56B:  CP      48h             ; 'H' Cursor home
-;        JP      NZ,LF575
-        LD      C,0Ch
-        ;JP      Z, EndEscSeqPrintCAndExit
+LF56B:	CP      48h             ; 'H' Cursor home
+;		JP      NZ,LF575
+		LD      C,0Ch
+		;JP      Z, EndEscSeqPrintCAndExit
 		RET		Z
-		
+
 		POP		HL
 
 LF575:  CP      4Ah             ; 'J' Clear to end of screen
@@ -200,9 +200,10 @@ LF5EB:  LD      L,A
         OR      0E8h
         LD      H,A
         LD      (0F75Ah),HL
-        LD      DE,0F801h		; -7FFF ??
+        LD      DE,0F801h		; -07FFH
         ADD     HL,DE
         LD      (HL),80h
+		
         ; --- START PROC ExitEscSequence ---
 ExitEscSequence:  XOR		A				; LD      A,00h
         LD      (EscSequenceState),A

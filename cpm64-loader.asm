@@ -4,14 +4,10 @@
 		CPU			8080
 		Z80SYNTAX	EXCLUSIVE
 
-		;INCLUDE		CFG.INC
+		INCLUDE		CFG.INC
 
 		ORG			3100h
 
-CCP		EQU			0C400H	; CP/M CCP
-BDOS	EQU			0CC00H	; CP/M BDOS
-BIOS	EQU			0DA00H	; CP/M BIOS
-TERM	EQU			0F500H	; Эмулятор терминала
 
 		; Перемещение CCP/BDOS/BIOS по итоговым адресам
 		LD			HL,3400h
