@@ -15,3 +15,5 @@ p2bin cpm64-loader.p cpm64-loader.bin
 
 asw -lU ch-com.asm > ch-com.lst
 p2bin ch-com.p ch-com.bin
+
+bin2rk cpm64-loader.bin 12544
