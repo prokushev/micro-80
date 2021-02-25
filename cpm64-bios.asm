@@ -222,7 +222,7 @@ READ:	CALL		COMAD
 		LD			HL,(DMAAD)
 		LD			B,64
 		LD			A,(DSKN)
-		OUT			(40h),A         ; '@'
+		OUT			(40h),A
 RDSK:	POP			DE
 		LD			(HL),E
 		INC			HL
@@ -231,7 +231,7 @@ RDSK:	POP			DE
 		DEC			B
 		JP			NZ,RDSK
 ENDI0:	LD			A,0FFh
-		OUT			(40h),A         ; '@'
+		OUT			(40h),A
 		LD			HL,(OLDSP)
 		LD			SP,HL
 		XOR			A
