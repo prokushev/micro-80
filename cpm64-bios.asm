@@ -115,7 +115,7 @@ GOCPM:	DI
 		JP			CCP
 
 		; --- START PROC SELDSK ---
-SELDSK:	;LD			HL,0000h
+SELDSK:	LD			HL,0000h
 		LD			A,C
 		;LD			(DISKNO),A
 		OR			A

@@ -197,11 +197,11 @@ wait_err:
 	jmp	reboot
 
 ;	error messages
-dskmsg:	db	"Bdos Err On "
+dskmsg:	db	"BDOS ERR ON "
 dskerr:	db	" : $"	;filled in by errflg
-permsg:	db	"Bad Sector$"
-selmsg:	db	"Select$"
-rofmsg:	db	"File "
+permsg:	db	"BAD SECTOR$"
+selmsg:	db	"SELECT$"
+rofmsg:	db	"FILE "
 rodmsg:	db	"R/O$"
 
 
