@@ -45,9 +45,9 @@ WBOOT:  LD			SP,0080h
 		LD			C,00h
 		CALL		SELDSK
 		CALL		HOME
-		LD			B,2Ch
-		LD			C,00h
-		LD			D,01h
+		LD			B,2Ch		; количество блоков (CPP+BDOS)
+		LD			C,00h		; дорожка
+		LD			D,01h		; сектор
 		LD			HL,CCP
 LOAD1:	PUSH		BC
 		PUSH		DE
@@ -72,8 +72,8 @@ LOAD1:	PUSH		BC
 		LD			A,D
 		CP			09h
 		JP			C,LOAD1
-		LD			D,01h
-		INC			C
+		LD			D,01h		; сектор
+		INC			C			; дорожка
 		PUSH		BC
 		PUSH		DE
 		PUSH		HL
@@ -101,7 +101,7 @@ BOOT1:	XOR			A
 		LD			(0003h),A
 
 GOCPM:	DI
-		LD			HL,LDA03
+		LD			HL,BIOS+3
 		LD			(0001h),HL
 		LD			BC,0080h
 		CALL		SETDMA

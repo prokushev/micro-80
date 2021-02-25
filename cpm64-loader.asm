@@ -17,10 +17,10 @@ L3106:	LD			A,(HL)
 		INC			HL
 		INC			DE
 		LD			A,H
-		CP			4Ch
+		CP			ENDC/0ffh ;4Ch
 		JP			NZ,L3106
 		LD			A,L
-		CP			00h
+		CP			ENDC-0ffH*(ENDC/0ffh) ;??
 		JP			NZ,L3106
 
 		; Сохранение копии CP/M на квазидиске
@@ -56,5 +56,9 @@ L3135:	LD			A,(HL)
 
 		ORG		3400H
 		BINCLUDE	CPM64-CCP.BIN
+		ORG		3400H+800H
 		BINCLUDE	CPM64-BDOS.BIN
+		ORG		3400H+1600H
 		BINCLUDE	CPM64-BIOS.BIN
+
+ENDC	EQU			$
