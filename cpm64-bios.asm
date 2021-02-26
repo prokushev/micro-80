@@ -317,7 +317,7 @@ OLDSP:	DS			2
 ;       [0]     is an optional 0 which forces 16K/directory entry
 
 		disks		1
-		diskdef		0, 1, 8, 1, 1024, 40, 20H, 32, 6
+		diskdef		0, 1, 8, 1, 1024, 40+64+64+64+64+64+64+64, 40H, 32, 6
 		endef
 
 HELLO:	DB		01fh, 0ah, "*MikrO/80* CP/M V2.2", 0ah, 0

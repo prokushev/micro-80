@@ -1,5 +1,7 @@
 ; МИКРО-80 CP/M 2.2 ЗАГРУЗЧИК
 ; Является обратным портом ЮТ-88 CP/M 2.2 на МИКРО-80
+; todo Образ квазидиска теперь содержит полный набор Directory
+; toto CH.COM добавлен в образ квазидиска
 
 		CPU			8080
 		Z80SYNTAX	EXCLUSIVE
@@ -51,17 +53,20 @@ L3135:	LD			A,(HL)
 		JP			NZ,L3135
 		JP			0DA00h
 
-		ORG		31E0H
+		ORG			31E0H
 		BINCLUDE	CPM64-TERM.BIN
 
-		ORG		3400H
+		; Образ квазидиска - системная часть
+		ORG			3400H
 		BINCLUDE	CPM64-CCP.BIN
-		ORG		3400H+800H
+		ORG			3400H+800H
 		BINCLUDE	CPM64-BDOS.BIN
-		ORG		3400H+1600H
+		ORG			3400H+1600H
 		BINCLUDE	CPM64-BIOS.BIN
 
 ENDC	EQU			$
 
-		DB			04FFFH-$+1 DUP (0E5H)
+		; Продолжение образа квазидиска - директория и данные
+
+		DB			64*32 DUP (0E5H)
 
