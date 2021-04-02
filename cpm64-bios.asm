@@ -70,7 +70,7 @@ LOAD1:	PUSH		BC
 		JP			Z,GOCPM
 		INC			D
 		LD			A,D
-		CP			09h
+		CP			09h			; сектор превысил максимум?
 		JP			C,LOAD1
 		LD			D,01h		; сектор
 		INC			C			; дорожка

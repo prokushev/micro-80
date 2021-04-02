@@ -1,3 +1,6 @@
+asw -lU monitor.asm > monitor.lst
+p2bin monitor.p monitor.bin
+
 asw -lU cpm64-term.asm > cpm64-term.lst
 p2bin cpm64-term.p cpm64-term.bin
 
