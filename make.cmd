@@ -20,3 +20,7 @@ asw -lU ch-com.asm > ch-com.lst
 p2bin ch-com.p ch-com.bin
 
 bin2rk cpm64-loader.bin 12544
+
+bin2rk basic80.bin
+
+bin2rk ctrlbas.bin
