@@ -5,12 +5,15 @@
 ; По ходу разбора встречаются мысли и хотелки
 ;
 ; Общие хотелки:
-; !!Добавить OPTION NOLET для управления наличием/отсутствием LET
-; !!Добавить OPTION NOEND для управления наличием/отсутствием END
+; !?Добавить OPTION NOLET для управления наличием/отсутствием LET
+; !?Добавить OPTION NOEND для управления наличием/отсутствием END
 ; !!Добавить поддержку каналов и потоков, как в Sinclair Basic, не забывая совместимость с ECMA стандартом
 ; !!Добавить поддержку дисковых операций через CP/M (с учетом, что под Микро-80 она существует) (ЗЫ: Базироваться на CP/M Бейсике не хочу)
 ; !!Отвязаться от RST и пересобрать с адреса 100h. Вначале добавить CP/M адаптер. При наличии поддержки дисковых фунок - адаптер не цепляем.
-; !!Добавить OPTION BASE для управления индеском массива
+; !!Добавить OPTION BASE для управления индеском массива (Совместимость ANSI)
+; !!Автонастройка памяти (сейчас жестко задано в коде)
+; !!GO TO=GOTO, GO SUB=GOSUB
+; ??ГОСТ расширение основных средств уровень 1 и 2 не могут быть реализованы из-за усеченного знакогенератора. Нет прописных букв.
 ;
 ; БЕЙСИК для МИКРО-80 - Общее устройство
 ;
@@ -27,6 +30,8 @@
 ; +-------------------------------+ E800H
 ; !         ОЗУ  курсора          !
 ; +-------------------------------+ E000H
+; !        Не  использована       !
+; +-------------------------------+ (MEM_TOP)
 ; !         Стек  Бейсика         !
 ; +-------------------------------+ (STACK_TOP)
 ; !            Массивы            !
@@ -102,9 +107,13 @@
 ; 	 
 ; The fixed-length of variable names greatly simplified their storage. Each variable occupies 6 bytes : two bytes for the name, and four bytes for the floating-point value (fixme: link to fp).
 ;
-; Arrays
+; Массивы
+; -------
 ;
-; Arrays are stored seperately in their own block which immediately follows normal variables and is pointed to by VAR_ARRAY_BASE. An array is declared with the DIM keyword, and this version of Basic has the curious property where declaring an array of n elements results in n+1 elements being allocated, addressable with subscript values from 0 to n inclusive. Thus the following is quite legal :
+; Массивы хранятся в отдельной области памяти, сразу после области переменных. Начала области массивов определяется переменной
+; VAR_ARRAY_BASE. Массивы определяются ключевым словом DIM, and this version of Basic has the curious property where declaring
+; an array of n elements results in n+1 elements being allocated, addressable with subscript values from 0 to n inclusive.
+; Thus the following is quite legal :
 ;
 ; DIM A(2)
 ; A(0) = 1
@@ -137,6 +146,30 @@
 ;
 	CPU	8080
 	Z80SYNTAX	EXCLUSIVE
+
+; Конфигурация
+MEM_TOP	EQU	03FFFH
+ANSI	EQU	0	; Включить поддержку совместимости с ANSI Minimal Basic
+GOST	EQU	0	; Включить поддержку совместимости с ГОСТ 27787-88
+
+	IF	ANSI
+OPTION	EQU	1	; Поддержка команды OPTION
+LET	EQU	1	; Поддержка команды LET
+RANDOMIZE EQU	1	; Поддержка команды RANDOMIZE
+END	EQU	1	; Поддержка команды END
+	ELSE
+	IF	GOST
+OPTION	EQU	1	; Поддержка команды OPTION
+LET	EQU	1	; Поддержка команды LET
+RANDOMIZE EQU	1	; Поддержка команды RANDOMIZE
+END	EQU	1	; Поддержка команды END
+	ELSE
+OPTION	EQU	0	; Поддержка команды OPTION
+LET	EQU	0	; Поддержка команды LET
+RANDOMIZE EQU	0	; Поддержка команды RANDOMIZE
+END	EQU	0	; Поддержка команды END
+	ENDIF
+	ENDIF
 ; 
 ;********************
 ;* 1. Интерпретатор *
@@ -162,11 +195,10 @@
 ; jump address here is coloured red, indicating the code is modified by code elsewhere.
 ; In this case, the jump address is changed to point to Ready once Init has run successfully. (fixme: not yet it isnt).
 
-; Конфигурация
-MaxMem	EQU	03FFFH
+
 
 Start:
-	LD	SP, MaxMem
+	LD	SP, MEM_TOP
 	JP	Init
 
 ; Данные байты не используются?
@@ -180,7 +212,6 @@ Start:
 ; advanced one byte - and the function falls into NextChar so the caller has even less work to do. I honestly doubt syntax checks could be done more 
 ; efficiently than this. Sheer bloody genius.
 
-RST1:
 SyntaxCheck:
 	LD	A,(HL)
 	EX	(SP),HL
@@ -220,7 +251,7 @@ CompareHLDE:
 	RET
 ;
 ;TERMINAL_X and TERMINAL_Y
-;Variables controlling the current X and Y positions of terminal outpu
+;Variables controlling the current X and Y positions of terminal output
 
 TERMINAL_Y:	DB		01
 TERMINAL_X:	DB		00
@@ -322,7 +353,8 @@ KW_ARITH_OP_FNS:
 
  
 ;KEYWORDS
-;String constants for all keywords, including arithmetic operators. Note that the last character of each keyword has bit 7 set to denote that it is the last character; also that the whole table is terminated with a single null byte.
+;String constants for all keywords, including arithmetic operators. Note that the last character of each keyword has bit 7 
+;set to denote that it is the last character; also that the whole table is terminated with a single null byte.
 
 ;General keywords
 
@@ -330,78 +362,238 @@ KW_ARITH_OP_FNS:
 ; LET и END выкинули зачем-то...
 
 KEYWORDS:
+Q	SET	80h
+TK_CLS	EQU	Q
 	DB	"CL", 'S'+80h	;	80
+Q	SET	Q+1
+TK_FOR	EQU	Q
 	DB	"FO", 'R'+80h	;	81
+Q	SET	Q+1
+TK_NEXT	EQU	Q
 	DB	"NEX", 'T'+80h	;	82
+Q	SET	Q+1
+TK_DATA	EQU	Q
 	DB	"DAT", 'A'+80h	;	83
+Q	SET	Q+1
+TK_INPUT	EQU	Q
 	DB 	"INPU", 'T'+80h	;	84
+Q	SET	Q+1
+TK_DIM	EQU	Q
 	DB 	"DI", 'M'+80h	;	85
+Q	SET	Q+1
+TK_READ	EQU	Q
 	DB 	"REA", 'D'+80h	;	86
+Q	SET	Q+1
+TK_CUR	EQU	Q
 	DB 	"CU",	'R'+80h	;	87
+Q	SET	Q+1
+TK_GOTO	EQU	Q
 	DB 	"GOT", 'O'+80h	;	88
+Q	SET	Q+1
+TK_RUN	EQU	Q
 	DB 	"RU", 'N'+80h	;	89
+Q	SET	Q+1
+TK_IF	EQU	Q
 	DB 	"I", 'F'+80h	;	8A
+Q	SET	Q+1
+TK_RESTORE	EQU	Q
 	DB 	"RESTOR", 'E'+80h	;	8B
+Q	SET	Q+1
+TK_GOSUB	EQU	Q
 	DB 	"GOSU", 'B'+80h	;	8C
+Q	SET	Q+1
+TK_RETURN	EQU	Q
 	DB 	"RETUR", 'N'+80h;	8D
+Q	SET	Q+1
+TK_REM	EQU	Q
 	DB 	"RE", 'M'+80h	;	8E
+Q	SET	Q+1
+TK_STOP	EQU	Q
 	DB 	"STO", 'P'+80h	;	8F
+Q	SET	Q+1
+TK_OUT	EQU	Q
 	DB	"OU", 'T'+80h	;	90
+Q	SET	Q+1
+TK_ON	EQU	Q
 	DB	"O", 'N'+80h	;	91
+Q	SET	Q+1
+TK_PLOT	EQU	Q
 	DB	"PLO", 'T'+80h	;	92
+Q	SET	Q+1
+TK_LINE	EQU	Q
 	DB	"LIN", 'E'+80h	;	93
+Q	SET	Q+1
+TK_POKE	EQU	Q
 	DB	"POK", 'E'+80h	;	94
+Q	SET	Q+1
+TK_PRINT	EQU	Q
 	DB 	"PRIN", 'T'+80h	;	95
+Q	SET	Q+1
+TK_DEF	EQU	Q
 	DB	"DE", 'F'+80h	;	96
+Q	SET	Q+1
+TK_CONT	EQU	Q
 	DB	"CON", 'T'+80h	;	97
+Q	SET	Q+1
+TK_LIST	EQU	Q
 	DB 	"LIS", 'T'+80h	;	98
+Q	SET	Q+1
+TK_CLEAR	EQU	Q
 	DB 	"CLEA", 'R'+80h	;	99
+Q	SET	Q+1
+TK_MLOAD	EQU	Q
 	DB	"MLOA", 'D'+80h	;	9a
+Q	SET	Q+1
+TK_MSAVE	EQU	Q
 	DB	"MSAV", 'E'+80h	;	9b
+Q	SET	Q+1
+TK_NEW	EQU	Q
 	DB 	"NE" , 'W'+80h	;	9c
+	IF	OPTION
+Q	SET	Q+1
+TK_OPTION	EQU	Q
+	DB	"OPTIO", 'N'+80h
+	ENDIF
+	IF	LET
+Q	SET	Q+1
+TK_LET	EQU	Q
+	DB	"LE", 'T'+80h
+	ENDIF
+	IF	RANDOMIZE
+Q	SET	Q+1
+TK_RANDOMIZE	EQU	Q
+	DB	"RANDOMIZE", 'E'+80h
+	ENDIF
+	IF	END
+Q	SET	Q+1
+TK_END	EQU	Q
+	DB	"EN", 'D'+80h
+	ENDIF
 ;Supplementary keywords
+Q	SET	Q+1
+TK_TAB	EQU	Q
 	DB 	"TAB", '('+80h	;	9d
+Q	SET	Q+1
+TK_TO	EQU	Q
 	DB 	"T", 'O'+80h	;	9e
+Q	SET	Q+1
+TK_SPC	EQU	Q
 	DB	"SPC", '('+80h	;	9f
+Q	SET	Q+1
+TK_FN	EQU	Q
 	DB	"F", 'N'+80h	;	a0
+Q	SET	Q+1
+TK_THEN	EQU	Q
 	DB 	"THE", 'N'+80h	;	a1
+Q	SET	Q+1
+TK_NOT	EQU	Q
 	DB	"NO", 'T'+80h	;	a2
+Q	SET	Q+1
+TK_STEP	EQU	Q
 	DB 	"STE", 'P'+80h	;	a3
 ;Arithmetic and logical operators
+Q	SET	Q+1
+TK_PLUS	EQU	Q
 	DB 	"+"+80h		;	a4
+Q	SET	Q+1
+TK_MINUS	EQU	Q
 	DB 	"-"+80h		;	a5
+Q	SET	Q+1
+TK_MUL	EQU	Q
 	DB	"*"+80h		;	a6
+Q	SET	Q+1
+TK_DIV	EQU	Q
 	DB 	"/"+80h		;	a7
+Q	SET	Q+1
+TK_POWER	EQU	Q
 	DB	'^'+80h		;	a8
+Q	SET	Q+1
+TK_AND	EQU	Q
 	DB	"AN", 'D'+80h	;	a9
+Q	SET	Q+1
+TK_OR	EQU	Q
 	DB	"O", 'R'+80h	;	aa
+Q	SET	Q+1
+TK_GT	EQU	Q
 	DB 	">"+80h		;	ab
+Q	SET	Q+1
+TK_EQ	EQU	Q
 	DB	"="+80h		;	ac
+Q	SET	Q+1
+TK_LT	EQU	Q
 	DB 	"<"+80h		;	ad
 ;Inline keywords
+Q	SET	Q+1
+TK_SGN	EQU	Q
 	DB 	"SG", 'N'+80h	;	ae
+Q	SET	Q+1
+TK_INT	EQU	Q
 	DB 	"IN", 'T'+80h	;	af
+Q	SET	Q+1
+TK_ABS	EQU	Q
 	DB 	"AB", 'S'+80h	;	b0
+Q	SET	Q+1
+TK_USR	EQU	Q
 	DB 	"US", 'R'+80h	;	b1
+Q	SET	Q+1
+TK_FRE	EQU	Q
 	DB	"FR", 'E'+80h	;	b2
+Q	SET	Q+1
+TK_INP	EQU	Q
 	DB	"IN", 'P'+80h	;	b3
+Q	SET	Q+1
+TK_POS	EQU	Q
 	DB	"PO", 'S'+80h	;	b4
+Q	SET	Q+1
+TK_SQR	EQU	Q
 	DB 	"SQ", 'R'+80h	;	b5
+Q	SET	Q+1
+TK_RND	EQU	Q
 	DB 	"RN", 'D'+80h	;	b6
+Q	SET	Q+1
+TK_LOG	EQU	Q
 	DB	"LO", 'G'+80h	;	b7
+Q	SET	Q+1
+TK_EXP	EQU	Q
 	DB	"EX", 'P'+80h	;	b8
+Q	SET	Q+1
+TK_COS	EQU	Q
 	DB	"CO", 'S'+80h	;	b9
+Q	SET	Q+1
+TK_SIN	EQU	Q
 	DB 	"SI", 'N'+80h	;	ba
+Q	SET	Q+1
+TK_TAN	EQU	Q
 	DB	"TA", 'N'+80h	;	bb
+Q	SET	Q+1
+TK_ATN	EQU	Q
 	DB	"AT", 'N'+80h	;	bc
+Q	SET	Q+1
+TK_PEEK	EQU	Q
 	DB	"PEE", 'K'+80h	;	bd
+Q	SET	Q+1
+TK_LEN	EQU	Q
 	DB	"LE", 'N'+80h	;	be
+Q	SET	Q+1
+TK_STRS	EQU	Q
 	DB	"STR", '$'+80h	;	bf
+Q	SET	Q+1
+TK_VAL	EQU	Q
 	DB	"VA", 'L'+80h	;	c0
+Q	SET	Q+1
+TK_ASC	EQU	Q
 	DB	"AS", 'C'+80h	;	c1
+Q	SET	Q+1
+TK_CHRS	EQU	Q
 	DB	"CHR", '$'+80h	;	c2
+Q	SET	Q+1
+TK_LEFTS	EQU	Q
 	DB	"LEFT", '$'+80h	;	c3
+Q	SET	Q+1
+TK_RIGHTS	EQU	Q
 	DB	"RIGHT", '$'+80h	;c4
+Q	SET	Q+1
+TK_MIDS	EQU	Q
 	DB	"MID", '$'+80h	;	c5
 ; --------------- Это потом из микрона возмем
 ;c7:SCREEN$( 1eee 1fd8 1a39
@@ -467,7 +659,18 @@ KW_GENERAL_FNS:
 	DW	Mload		;			1905
 	DW	Msave		;			18EE
 	DW	New		;			039D
-
+	IF	OPTION
+	DW	Option
+	ENDIF
+	IF	LET
+	DW	Let
+	ENDIF
+	IF	RANDOMIZE
+	DW	Randomize
+	ENDIF
+	IF	END
+	DW	End
+	ENDIF
 ;1.3 Error Codes & Globals
 ;A table of two-character error codes for the 18 errors.
 ERROR_CODES:
@@ -600,12 +803,13 @@ PROG_PTR_TEMP:
 	DW	1722h				; Мусор, можно=0
 PROG_PTR_TEMP2:
 	DW	01d5h				; Мусор, можно=0
-CURRENT_LINE:	DW		0FFFFH		; Номер текущей исполняемой строки FFFF - никакая не исполняется
+CURRENT_LINE:
+	DW	0FFFFH		; Номер текущей исполняемой строки FFFF - никакая не исполняется
 	DB	6eh, 0ah
 	db	0,0
-	db	0cdh, 3fh
-
-	ORG	0243H
+	ORG	0241H
+STACK_TOP:
+	DW	03fcdh				; Верхушка стека бейсика
 PROGRAM_BASE:
 	DW	2201h
 VAR_BASE:
@@ -638,27 +842,39 @@ szStop:		DB		0Dh, 0Ah, 73h, 74h, 6Fh, 70h, 0A0h, 00h		; "СТОП "
 
 ;Some useful functions.
 ;GetFlowPtr
-;Sets HL to point to the appropriate flow struct on the stack. On entry, if this was called by the NEXT keyword handler then DE is pointing to the variable following the NEXT keyword.
+;Sets HL to point to the appropriate flow struct on the stack. On entry, 
+;if this was called by the NEXT keyword handler then DE is pointing to 
+;the variable following the NEXT keyword.
 
 	ORG 027ah
+
+
+;The first four bytes on the stack are (or rather, should be) two return addresses. We're not interested in them, so the first thing to do is set HL to point to SP+4.
 
 GetFlowPtr:		
 	LD      HL,0004H
         ADD     HL,SP
-L027E:  LD      A,(HL)
+
+;Get the keyword ID, the byte that precedes the flow struct. Then we increment HL so it points to (what should be) the flow struct, and return if the keyword ID is not 'FOR'.
+
+GetFlowLoop:
+	LD      A,(HL)
         INC     HL
-        CP      81H
+        CP      TK_FOR
         RET     NZ
+
+;Special treatment for FOR flow structs. Here we check that we've got the right one, ie the one required by the NEXT statement which called us. When we're called by NEXT, it sets DE to point to the variable in the NEXT statement. So here we get the first word of the FOR flow struct which is the address of the FOR variable, and compare it to the one we've been given in DE. If they match, then we've found the flow struct wanted and we can safely return. If not then we jump 13 bytes up the stack - 13 bytes is the size of the FOR flow struct - and loop back to try again.
 
         LD      C,(HL)
         INC     HL
         LD      B,(HL)
         INC     HL
         PUSH    HL
-L0288:  LD      L,C
-L0289:  LD      H,B
+	LD      L,C
+	LD      H,B
         LD      A,D
         OR      E
+
         EX      DE,HL
         JP      Z,L0292
         EX      DE,HL
@@ -668,25 +884,27 @@ L0292:  LD      BC,000DH
         RET     Z
 
         ADD     HL,BC
-        JP      L027E
+        JP      GetFlowLoop
 		
 ;		
 ;CopyMemoryUp
 ;Copies a block of memory from BC to HL. Copying is done backwards, down to and including the point where BC==DE. It goes backwards because this function is used to move blocks of memory forward by as little as a couple of bytes. If it copied forwards then the block of memory would overwrite itself.
 
 		
-L029B:  CALL    CheckEnoughMem
+CopyMemoryUp:
+	CALL    CheckEnoughMem
 L029E:  PUSH    BC
         EX      (SP),HL
         POP     BC
-L02A1:  RST     CompareHLDE
+CopyMemLoop:
+	RST     CompareHLDE
         LD      A,(HL)
         LD      (BC),A
         RET     Z
 
         DEC     BC
         DEC     HL
-        JP      L02A1
+        JP      CopyMemLoop
 		
 ;CheckEnoughVarSpace2
 ; То же, что и ниже, но C берется из следующей ячейки, откуда вызвана подпрограмма. Более эффективно, чем в Altair Basic
@@ -743,7 +961,7 @@ L02D6:
 ;Error
 ;Resets the stack, prints an error code (offset into error codes table is given in E), and stops program execution.
 Error:
-	CALL    L03C2
+	CALL    ResetStack
         XOR     A
         LD      (l0217H),A
         CALL    L07DC
@@ -825,7 +1043,7 @@ L0341:  POP     DE
         POP     BC
         ADD     HL,BC
         PUSH    HL
-        CALL    L029B
+        CALL    CopyMemoryUp
         POP     HL
         LD      (VAR_BASE),HL
         EX      DE,HL
@@ -844,7 +1062,7 @@ L0360:  LD      A,(DE)
         INC     DE
         OR      A
         JP      NZ,L0360
-L0368:  CALL    L03A9
+L0368:  CALL    ResetAll
         INC     HL
 L036C:  LD      D,H
         LD      E,L
@@ -913,17 +1131,19 @@ New2:
 ;ResetAll
 ;Resets everything.
 		
-L03A9:  LD      HL,(PROGRAM_BASE)
+ResetAll:
+	LD      HL,(PROGRAM_BASE)
         DEC     HL
 L03AD:  LD      (PROG_PTR_TEMP),HL
         LD      HL,(021BH)
         LD      (022FH),HL
-        CALL    L05DB
+        CALL    Restore
         LD      HL,(VAR_BASE)
         LD      (VAR_ARRAY_BASE),HL
         LD      (VAR_TOP),HL
-L03C2:  POP     BC
-        LD      HL,(0241H)
+ResetStack:
+	POP     BC
+        LD      HL,(STACK_TOP)
         LD      SP,HL
         LD      HL,021FH
         LD      (021DH),HL
@@ -949,7 +1169,8 @@ Tokenize:  XOR     A
         LD      (021AH),A
 		
 ;Tokenize
-;Tokenises LINE_BUFFER, replacing keywords with their IDs. On exit, C holds the length of the tokenised line plus a few bytes to make it a complete program line.
+;Tokenises LINE_BUFFER, replacing keywords with their IDs. On exit, C holds the length of the tokenised line plus a few bytes to make it a 
+;complete program line.
 
         LD      C,05H
         LD      DE,LINE_BUFFER
@@ -1234,12 +1455,13 @@ L0585:  LD      B,81H
 ;		
 ;1.9 Execution
 ;ExecNext
-;Having exec'd one statement, this block moves on to the next statement in the line or the next line if there are no more statements on the current line.
+;Having exec'd one statement, this block moves on to the next statement 
+;in the line or the next line if there are no more statements on the current line.
 ;
 
-ExecNext:		
-L0589:  CALL    0F812h
-        NOP     
+ExecNext:
+	CALL    0F812h
+        NOP
         CALL    NZ,L05EA
         LD      (PROG_PTR_TEMP),HL
         LD      A,(HL)
@@ -1265,7 +1487,7 @@ L0589:  CALL    0F812h
 
 		
 Exec:	RST     NextChar
-        LD      DE,L0589
+        LD      DE,ExecNext
         PUSH    DE
 L05B2:  RET     Z
 
@@ -1277,7 +1499,7 @@ L05B3:  SUB     80H
         LD      C,A
         LD      B,00H
         EX      DE,HL
-        LD      HL,0170H
+        LD      HL,KW_GENERAL_FNS
         ADD     HL,BC
         LD      C,(HL)
         INC     HL
@@ -1308,7 +1530,7 @@ NextChar_tail:
 
 	ORG	05DBh
 Restore:
-L05DB:  EX      DE,HL
+	EX      DE,HL
         LD      HL,(PROGRAM_BASE)
         DEC     HL
 L05E0:  LD      (DATA_PROG_PTR),HL
@@ -1316,7 +1538,12 @@ L05E0:  LD      (DATA_PROG_PTR),HL
         RET     
 
 ;TestBreakKey
-;Apparently the Altair had a 'break' key, to break program execution. This little function tests to see if the terminal input device is ready, and returns if it isn't. If it is ready (ie user has pressed a key) then it reads the char from the device, compares it to the code for the break key (0x03) and jumps to Stop. Since the first instruction at Stop is RNZ, this will return at once if the user pressed some other key.
+;Apparently the Altair had a 'break' key, to break program execution. 
+;This little function tests to see if the terminal input device is ready,
+; and returns if it isn't. If it is ready (ie user has pressed a key) 
+;then it reads the char from the device, compares it to the code for
+; the break key (0x03) and jumps to Stop. Since the first instruction 
+;at Stop is RNZ, this will return at once if the user pressed some other key.
 
 L05E5:  CALL    0F812h
         NOP     
@@ -1377,13 +1604,13 @@ Cont:
 ;If character pointed to by HL is alphabetic, the carry flag is reset otherwise set.
 ;
 CharIsAlpha:
-L0639:  LD      A,(HL)
+	LD      A,(HL)
         CP      41H
         RET     C
 
         CP      5BH
-        CCF     
-        RET     
+        CCF
+        RET
 
 
 ;GetSubscript
@@ -1460,15 +1687,15 @@ Clear:
         RST     CompareHLDE
         JP      NC,OutOfMemory
         EX      DE,HL
-        LD      (0241H),HL
+        LD      (STACK_TOP),HL
         POP     HL
         JP      L03AD
 ;;;		
 	ORG	06ABH
 Run:
-        JP      Z,L03A9
+        JP      Z,ResetAll
         CALL    L03AD
-        LD      BC,L0589
+        LD      BC,ExecNext
         JP      L06C6
 		
 	ORG	06B7H
@@ -1487,7 +1714,7 @@ L06C6:  PUSH    BC
 
 	ORG	06C7H
 Goto:
-L06C7:  CALL    LineNumberFromStr
+	CALL    LineNumberFromStr
         CALL    Rem
         PUSH    HL
         LD      HL,(CURRENT_LINE)
@@ -1519,7 +1746,7 @@ Return:
         JP      NZ,Error
         POP     HL
         LD      (CURRENT_LINE),HL
-        LD      HL,L0589
+        LD      HL,ExecNext
         EX      (SP),HL
 		
 ;Safe to fall into FindNextStatement, since we're already at the end of the line!...
@@ -1581,7 +1808,7 @@ L072B:  PUSH    HL
         INC     HL
         RST     30H
         POP     DE
-        LD      HL,(0241H)
+        LD      HL,(STACK_TOP)
         RST     CompareHLDE
         POP     DE
         JP      NC,L0745
@@ -1649,12 +1876,13 @@ If:
 L0784:  RST     FTestSign
         JP      Z,Rem
         RST     NextChar
-        JP      C,L06C7
+        JP      C,Goto
         JP      L05B2
 		
 ;1.14 Printing
 ;Print
-;Prints something! It can be an empty line, a single expression/literal, or multiple expressions/literals seperated by tabulation directives 
+;Prints something! It can be an empty line, a single expression/literal, 
+;or multiple expressions/literals seperated by tabulation directives 
 ;(comma, semi-colon, or the TAB keyword).
 		
         DEC     HL
@@ -1937,7 +2165,7 @@ L0958:  LD      SP,HL
         LD      HL,(PROG_PTR_TEMP)
         LD      A,(HL)
         CP      2CH
-        JP      NZ,L0589
+        JP      NZ,ExecNext
         RST     NextChar
         CALL    L0920
 L0966:  CALL    EvalExpression
@@ -2028,7 +2256,7 @@ EvalTerm:
 L09E6:  LD      (0219H),A
         RST     NextChar
         JP      C,FIn
-        CALL    L0639
+        CALL    CharIsAlpha
         JP      NC,L0A2F
         CP      0A4H
         JP      Z,EvalTerm
@@ -2227,34 +2455,35 @@ L0AF9:  LD      D,5AH
 ;Dim
 ;Declares an array. Note that the start of this function handler is some way down in the block (at 0716).
 
-        DEC     HL
+DimContd:
+	DEC     HL
         RST     NextChar
         RET     Z
 
         RST     SyntaxCheck
-        DB	2ch
-	
+        DB	','
+
 	ORG	0B15H
 Dim:
-        LD      BC,0B10H
+        LD      BC,DimContd
         PUSH    BC
         DB	0f6h	; OR      0AFH
 GetVar:	XOR	A
         LD      (0218H),A
         LD      B,(HL)
-L0B1F:  CALL    L0639
+L0B1F:  CALL    CharIsAlpha
         JP      C,SyntaxError
         XOR     A
         LD      C,A
         LD      (0219H),A
         RST     NextChar
         JP      C,L0B34
-        CALL    L0639
+        CALL    CharIsAlpha
         JP      C,L0B3F
 L0B34:  LD      C,A
 L0B35:  RST     NextChar
         JP      C,L0B35
-        CALL    L0639
+        CALL    CharIsAlpha
         JP      NC,L0B35
 L0B3F:  SUB     24H
         JP      NZ,L0B4C
@@ -2297,7 +2526,7 @@ L0B78:  PUSH    BC
         ADD     HL,BC
         POP     BC
         PUSH    HL
-        CALL    L029B
+        CALL    CopyMemoryUp
         POP     HL
         LD      (VAR_TOP),HL
         LD      H,B
@@ -2469,7 +2698,7 @@ Fre:
         JP      Z,L0C96
         CALL    L0EC1
         CALL    L0DD2
-        LD      HL,(0241H)
+        LD      HL,(STACK_TOP)
         EX      DE,HL
         LD      HL,(022FH)
 L0C96:  LD      A,L
@@ -2655,7 +2884,7 @@ L0D9D:  DEC     E
 L0DAA:  OR      A
         LD      C,0F1H
         PUSH    AF
-        LD      HL,(0241H)
+        LD      HL,(STACK_TOP)
         EX      DE,HL
         LD      HL,(022FH)
         CPL     
@@ -2682,7 +2911,7 @@ L0DD2:  LD      HL,(021BH)
 L0DD5:  LD      (022FH),HL
         LD      HL,0000H
         PUSH    HL
-        LD      HL,(0241H)
+        LD      HL,(STACK_TOP)
         PUSH    HL
         LD      HL,021FH
         EX      DE,HL
