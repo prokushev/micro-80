@@ -13,7 +13,8 @@
 ; !!Добавить OPTION BASE для управления индеском массива (Совместимость ANSI)
 ; !!Автонастройка памяти (сейчас жестко задано в коде)
 ; !!GO TO=GOTO, GO SUB=GOSUB
-; ??ГОСТ расширение основных средств уровень 1 и 2 не могут быть реализованы из-за усеченного знакогенератора. Нет прописных букв.
+; ??ГОСТ расширение основных средств уровень 1 и 2 не могут быть реализованы из-за усеченного знакогенератора. Нет строчных букв.
+; !!Развернутые сообщения об ошибках
 ;
 ; БЕЙСИК для МИКРО-80 - Общее устройство
 ;
@@ -50,7 +51,12 @@
 ;
 ; Lets consider the blocks of memory that follow Basic's own code in turn :
 ;
-; The minimum amount of stack space is 18 bytes - at initialisation, after the user has stated the options they want, the amount of space is reported as "X BYTES FREE", where X is 4096 minus (amount needed for Basic, plus 18 bytes for the stack). With all optional inline functions selected - SIN, RND, and SQR - X works out to 727 bytes. With no optional inline functions selected, the amount increases to 973 bytes.
+; The minimum amount of stack space is 18 bytes - at initialisation, after the
+; user has stated the options they want, the amount of space is reported as 
+; "X BYTES FREE", where X is 4096 minus (amount needed for Basic, plus 18 bytes
+; for the stack). With all optional inline functions selected - SIN, RND, and SQR
+; - X works out to 727 bytes. With no optional inline functions selected, the 
+; amount increases to 973 bytes.
 ;
 ; Код программы
 ;
@@ -59,7 +65,10 @@
 ; следующие два байта хранят номер строки, а заканчивается она байтом, заполненным одними нулями. Таким образом,
 ; текст программы хранится в памяти в виде специальной структуры данных, называемой в литературе "односвязным списком".
 ;
-; For efficiency, each line of the program would be 'tokenised' before being stored in program space. This tokenisation involved the simple replacement of keywords with keyword IDs. These keyword IDs occupied a single byte, and were easily distinguished from other bytes of the program since they had their top bit set - ie they were in the range of 0x80 to 0xFF.
+; For efficiency, each line of the program would be 'tokenised' before being stored in program space. 
+; This tokenisation involved the simple replacement of keywords with keyword IDs. These keyword IDs 
+; occupied a single byte, and were easily distinguished from other bytes of the program since they 
+; had their top bit set - ie they were in the range of 0x80 to 0xFF.
 ;
 ; Consider this line of input :
 ;
@@ -148,7 +157,7 @@
 	Z80SYNTAX	EXCLUSIVE
 
 ; Конфигурация
-MEM_TOP	EQU	03FFFH
+MEM_TOP	EQU	03FFFH	; Верхний адрес доступной памяти
 ANSI	EQU	0	; Включить поддержку совместимости с ANSI Minimal Basic
 GOST	EQU	0	; Включить поддержку совместимости с ГОСТ 27787-88
 
@@ -182,15 +191,13 @@ END	EQU	0	; Поддержка команды END
 ; Полезной возможностью 8080 является возможность вызова ряда адресов в нижних адресах
 ; памяти однобайтовой инструкцией вместо стандартных 3-х байтовых вызовов
 ; CALL и подобными командами. Данные адреса называют адресами "Рестартов"
-; and memory-conscious programmers would always put their most-commonly 
-; called functions here, thus saving two bytes on every call elsewhere in the program.
-; There are 7 restart addresses, spaced at 8 byte intervals from 0000 to 0030 inclusive.
-; (NB: There is support for an eighth restart function, RST 7, but Basic makes no use of it).
+; и обычно используются для часто вызываемых функций, что эконоит по 2 байта на каждом вызове.
+; Всего Бейсик использует 7 рестартов.
 
-; Start (RST 0)
+; Начало (RST 0)
 
-; Once the loader had finished loading Basic into memory from paper tape it would jump to 
-; address 0000, the very start of the program. Not much needs to be done here - just 
+; Запус осуществляется с адреса 0. Проводится инициализация стека и
+; переход address 0000, the very start of the program. Not much needs to be done here - just 
 ; disable interrupts and jump up to the Init section in upper memory. Notice that the
 ; jump address here is coloured red, indicating the code is modified by code elsewhere.
 ; In this case, the jump address is changed to point to Ready once Init has run successfully. (fixme: not yet it isnt).
@@ -673,25 +680,68 @@ KW_GENERAL_FNS:
 	ENDIF
 ;1.3 Error Codes & Globals
 ;A table of two-character error codes for the 18 errors.
+
+;Ошибка 01. В программе встретился оператор NEXT, для которого не был выполнен соответствующий оператор FOR.
+;Ошибка 02. Неверный синтаксис.
+;Ошибка 03. В программе встретился оператор RETURN без предварительного выполнения оператора GOSUB.
+;Ошибка 04. При выполнении программы не хватает данных для оператора READ. т.е. данных, описанных операторами DATA меньше, чем переменных в операторах READ.
+;Ошибка 05. Аргумент функции не соответствует области определения данной функции. Например, отрицательный или нулевой аргумент функции LOG(X), отрицательный аргумент у функции SQR(X) и т. д.
+;Ошибка 06. Переполнение при выполнении арифметических операций Результат любой операции не может быть больше +1,7-1035 или меньше -1,7-1035.
+;Ошибка 07. Недостаточен объем памяти. Возможные причины:
+;	велик текст программы:
+;	слишком длинны массивы данных:
+;	вложенность подпрограмм и циклов больше нормы;
+;	слишком много переменных.
+;Ошибка 08. Нет строки с данным номером. Возникает при выполнении операторов перехода.
+;Ошибка 09. Индекс не соответствует размерности массива.
+;Ошибка 10. Повторное выполнение операторов DIM или DEF, описывающих массив или функцию, которые уже были описаны ранее.
+;Ошибка 11. Деление на ноль.
+;Ошибка 12. Попытка выполнить операторы INPUT или DEP в непосредственном режиме.
+;Ошибка 13. Несоответствие типов данных. Возникает при попытке символьной переменной присвоить числовое значение и наоборот.
+;Ошибка 14. Переполнение буферной области памяти, отведенной для хранения символьных переменных. Для расширения объема буфера служит директива CLEAR.
+;Ошибка 15. Длина символьной переменной превышает 255.
+;Ошибка 16. Выражение, содержащее символьные переменные, слишком сложно для интерпретатора.
+;Ошибка 17. Невозможность продолжения выполнения программы по директиве CONT.
+;Ошибка 18. Обращение к функции, не описанной оператором DEF.
+
+
 ERROR_CODES:
-	DB	'0','1'+80h
-	DB	'0','2'+80h
-	DB	'0','3'+80h
-	DB	'0','4'+80h
-	DB	'0','5'+80h
-	DB	'0','6'+80h
-	DB	'0','7'+80h
-	DB	'0','8'+80h
-	DB	'0','9'+80h
-	DB	'1','0'+80h
-	DB	'1','1'+80h
-	DB	'1','2'+80h
-	DB	'1','3'+80h
-	DB	'1','4'+80h
-	DB	'1','5'+80h
-	DB	'1','6'+80h
-	DB	'1','7'+80h
-	DB	'1','8'+80h
+ERR_NF	EQU	$-ERROR_CODES
+	DB	'0','1'+80h	; 00 NEXT without FOR
+ERR_SN	EQU	$-ERROR_CODES
+	DB	'0','2'+80h	; 02 Syntax Error
+ERR_RG	EQU	$-ERROR_CODES
+	DB	'0','3'+80h	; 04 RETURN without GOSUB
+ERR_OD	EQU	$-ERROR_CODES
+	DB	'0','4'+80h	; 06 Out of Data
+ERR_FC	EQU	$-ERROR_CODES
+	DB	'0','5'+80h	; 08 Illegal Function Call
+ERR_OV	EQU	$-ERROR_CODES
+	DB	'0','6'+80h	; 0A Overflow
+ERR_OM	EQU	$-ERROR_CODES
+	DB	'0','7'+80h	; 0C Out of memory
+ERR_US	EQU	$-ERROR_CODES
+	DB	'0','8'+80h	; 0E Undefined Subroutine
+ERR_BS	EQU	$-ERROR_CODES
+	DB	'0','9'+80h	; 10 Bad Subscript
+ERR_DD	EQU	$-ERROR_CODES
+	DB	'1','0'+80h	; 12 Duplicate Definition
+ERR_DZ	EQU	$-ERROR_CODES
+	DB	'1','1'+80h	; 14 Division by zero
+ERR_ID	EQU	$-ERROR_CODES
+	DB	'1','2'+80h	; 16 Invalid in Direct mode
+ERR_TM	EQU	$-ERROR_CODES
+	DB	'1','3'+80h	; 18 Type mismatch
+ERR_SO	EQU	$-ERROR_CODES
+	DB	'1','4'+80h	; 1AH Out of string space
+ERR_LS	EQU	$-ERROR_CODES
+	DB	'1','5'+80h	; 1CH String too long
+ERR_ST	EQU	$-ERROR_CODES
+	DB	'1','6'+80h	; 1EH String formula too complex
+ERR_CN	EQU	$-ERROR_CODES
+	DB	'1','7'+80h	; 20H Can't continue
+ERR_UF	EQU	$-ERROR_CODES
+	DB	'1','8'+80h	; 22H
 
 	org 01ceh
 
@@ -964,10 +1014,10 @@ Error:
 	CALL    ResetStack
         XOR     A
         LD      (l0217H),A
-        CALL    L07DC
+        CALL    NewLine
         LD      HL,ERROR_CODES
         LD      D,A
-        LD      A,3FH
+        LD      A,'?'
         RST     OutChar
         ADD     HL,DE
         LD      A,(HL)
@@ -1263,7 +1313,7 @@ L0476:  DEC     B
         RST     OutChar
         JP      NZ,L0485
 L047C:  RST     OutChar
-        CALL    L07DC
+        CALL    NewLine
 InputLine:
 	LD      HL,01CFH
         LD      B,01H
@@ -1311,7 +1361,7 @@ OutChar_tail:
 ;Prints a character to the terminal. On entry, the char to be printed is on the stack and A holds TERMINAL_X. If the current line is up to the maximum width then we print a new line and update the terminal position. Then we print the character - to do this we loop until the device is ready to receive a char and then write it out.
 
         CP      48H
-        CALL    Z,L07DC
+        CALL    Z,NewLine
         INC     A
         LD      (TERMINAL_X),A
 L04CD:  POP     AF
@@ -1360,7 +1410,7 @@ L04F9:  POP     BC
         JP      Z,Main
         CALL    L05E5
         PUSH    BC
-        CALL    L07DC
+        CALL    NewLine
         RST     30H
         EX      (SP),HL
         CALL    PrintInt
@@ -1890,7 +1940,7 @@ L0790:  RST     NextChar
 
 	ORG	0791H
 Print:
-        JP      Z,L07DC
+        JP      Z,NewLine
 L0794:  RET     Z
 
         CP      9DH
@@ -1915,7 +1965,7 @@ L0794:  RET     Z
         LD      A,(TERMINAL_X)
         ADD     A,(HL)
         CP      40H
-        CALL    NC,L07DC
+        CALL    NC,NewLine
         CALL    L0D96
         LD      A,20H
         RST     OutChar
@@ -1932,14 +1982,16 @@ L07D7:  LD      (HL),00H
 		
 ;NewLine
 ;Prints carriage return + line feed, plus a series of nulls which was probably due to some peculiarity of the teletypes of the day.
-		
-L07DC:  LD      A,0DH
+
+NewLine:
+	LD      A,0DH
         LD      (TERMINAL_X),A
         RST     OutChar
         LD      A,0AH
         RST     OutChar
 L07E5:  LD      A,(TERMINAL_Y)
-L07E8:  DEC     A
+PrintNullLoop:
+	DEC     A
         LD      (TERMINAL_X),A
         RET     Z
 
@@ -1947,7 +1999,7 @@ L07E8:  DEC     A
         XOR     A
         RST     OutChar
         POP     AF
-        JP      L07E8
+        JP      PrintNullLoop
 		
 
 ;ToNextTabBreak
@@ -1955,7 +2007,7 @@ L07E8:  DEC     A
 		
 L07F4:  LD      A,(TERMINAL_X)
         CP      30H
-        CALL    NC,L07DC
+        CALL    NC,NewLine
         JP      NC,ExitTab
 L07FF:  SUB     0EH
         JP      NC,L07FF
@@ -4680,13 +4732,14 @@ Init:	XOR     A
 
 		; Приветственное сообщение
         LD      HL, szHello
-L1749:  LD      A,(HL)
+InitLoop:
+	LD      A,(HL)
         OR      A			; CP 0
         JP      Z,Main
         LD      C,(HL)
         INC     HL
         CALL    0F809h
-        JP      L1749
+        JP      InitLoop
 		
 szHello:		DB		1Fh, 0Dh, 0Ah, 2Ah, 4Dh, 69h, 6Bh, 72h, 4Fh, 2Fh
 			DB		38h, 30h, 2Ah, 20h, 42h, 41h, 53h, 49h, 43h, 00h
