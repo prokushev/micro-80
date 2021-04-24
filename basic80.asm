@@ -65,22 +65,26 @@
 ; следующие два байта хранят номер строки, а заканчивается она байтом, заполненным одними нулями. Таким образом,
 ; текст программы хранится в памяти в виде специальной структуры данных, называемой в литературе "односвязным списком".
 ;
-; For efficiency, each line of the program would be 'tokenised' before being stored in program space. 
-; This tokenisation involved the simple replacement of keywords with keyword IDs. These keyword IDs 
-; occupied a single byte, and were easily distinguished from other bytes of the program since they 
-; had their top bit set - ie they were in the range of 0x80 to 0xFF.
+; Для большей эффективности по скорости и использованию памяти, программа храниться в токенизированном виде.
+; Токенизация заключается в простой замене ключевых слов их идентификаторами. Идентификатора занимают один байта
+; (более поздние версии используют 1- и 2-байтовые идентификаторы). Идентификатор определяется установленным
+; старшим битом, т.е. коды индентификаторов находятся в диапазоне 0x80 - 0xFF.
 ;
-; Consider this line of input :
+; Например, строка:
 ;
 ; FOR I=1 TO 10
 ;
-; This would be tokenised to :
+; В токенизированном виде выглядит как :
 ;
 ; 81 " I=1" 95 " 10"
 ;
-; Which is 0x81 (keyword ID for 'FOR') followed by the string " I=1", followed by 0x95 (keyword ID for 'TO') followed by the string " 10". This is 9 bytes, compared to 13 bytes for the untokenised input.
+; Which is 0x81 (keyword ID for 'FOR') followed by the string " I=1", followed by 0x95 (keyword ID for 'TO') followed by the string " 10".
+; This is 9 bytes, compared to 13 bytes for the untokenised input.
 ;
-; This particular example line of input is meaningless unless it is part of a larger program. As you should know already, each line of a program is prefixed with a line number. These line numbers get stored as 16-bit integers preceding the tokenised line content. Additionally, each line is stored with a pointer to the following line. Let's consider the example input again, this time as a part of a larger program :
+; This particular example line of input is meaningless unless it is part of a larger program. As you should know already,
+; each line of a program is prefixed with a line number. These line numbers get stored as 16-bit integers preceding the
+; tokenised line content. Additionally, each line is stored with a pointer to the following line. Let's consider the 
+; example input again, this time as a part of a larger program :
 ;
 ; 10 FOR I=1 TO 10
 ; 20 PRINT "HELLO WORLD"
@@ -228,7 +232,9 @@ SyntaxCheck:
 	JP	NZ,SyntaxError
 
 ;NextChar (RST 2)
-;Return next character of input from the buffer at HL, skipping over space characters. The Carry flag is set if the returned character is not alphanumeric, also the zero flag is set if a null character has been reached.
+;Return next character of input from the buffer at HL, skipping over space characters. 
+;The Carry flag is set if the returned character is not alphanumeric,
+; also the zero flag is set if a null character has been reached.
 
 NextChar:
 	INC	HL
@@ -242,7 +248,7 @@ NextChar:
 
 OutChar:
 	PUSH	AF
-	LD	A,(l0217H)
+	LD	A,(ControlChar)
 	OR	A
 	JP	OutChar_tail
 
@@ -478,6 +484,7 @@ TK_END	EQU	Q
 	ENDIF
 ;Supplementary keywords
 Q	SET	Q+1
+TKCOUT	EQU	Q-80H
 TK_TAB	EQU	Q
 	DB 	"TAB", '('+80h	;	9d
 Q	SET	Q+1
@@ -741,14 +748,15 @@ ERR_ST	EQU	$-ERROR_CODES
 ERR_CN	EQU	$-ERROR_CODES
 	DB	'1','7'+80h	; 20H Can't continue
 ERR_UF	EQU	$-ERROR_CODES
-	DB	'1','8'+80h	; 22H
+	DB	'1','8'+80h	; 22H Undefined function
 
 	org 01ceh
 
 ;LINE_BUFFER
 ;Buffer for a line of input or program, 73 bytes long.
 ;
-;The line buffer is prefixed with this comma. It's here because the INPUT handler defers to the READ handler, which expects items of data (which the line buffer is treated as) to be prefixed with commas. Quite a neat trick!
+;The line buffer is prefixed with this comma. It's here because the INPUT handler defers to the READ handler,
+;which expects items of data (which the line buffer is treated as) to be prefixed with commas. Quite a neat trick!
 
 	DB	','
 LINE_BUFFER: 
@@ -823,10 +831,14 @@ LINE_BUFFER:
 
 	ORG     0216h
 	NOP     
-l0217H:	DB		00		; Контроль вывода символа на экран или Тип последнего введенного с клавиатуры символа 00 - обычный символ FF - управляющий
+ControlChar:
+	DB		00		; Тип символа 00 - обычный символ FF - управляющий
             
         NOP     
-        LD      BC,0FF00H
+        DB	01h
+DATA_STM:
+	DB	0			; Признак обработки TK_DATA
+	DB	0FFH
         CCF     
         RRA     
         LD      (BC),A
@@ -846,7 +858,8 @@ l0217H:	DB		00		; Контроль вывода символа на экран �
         CCF     
         PUSH    DE
         LD      BC,0000H
-        NOP     
+NO_ARRAY:
+	DB	00H				; Флаг, что переменная-массив недопустима (для TK_FOR, например)
 INPUT_OR_READ:
 	DB	00H
 PROG_PTR_TEMP:
@@ -899,13 +912,15 @@ szStop:		DB		0Dh, 0Ah, 73h, 74h, 6Fh, 70h, 0A0h, 00h		; "СТОП "
 	ORG 027ah
 
 
-;The first four bytes on the stack are (or rather, should be) two return addresses. We're not interested in them, so the first thing to do is set HL to point to SP+4.
+;The first four bytes on the stack are (or rather, should be) two return addresses.
+; We're not interested in them, so the first thing to do is set HL to point to SP+4.
 
 GetFlowPtr:		
 	LD      HL,0004H
         ADD     HL,SP
 
-;Get the keyword ID, the byte that precedes the flow struct. Then we increment HL so it points to (what should be) the flow struct, and return if the keyword ID is not 'FOR'.
+;Get the keyword ID, the byte that precedes the flow struct. Then we increment HL
+; so it points to (what should be) the flow struct, and return if the keyword ID is not 'FOR'.
 
 GetFlowLoop:
 	LD      A,(HL)
@@ -913,7 +928,13 @@ GetFlowLoop:
         CP      TK_FOR
         RET     NZ
 
-;Special treatment for FOR flow structs. Here we check that we've got the right one, ie the one required by the NEXT statement which called us. When we're called by NEXT, it sets DE to point to the variable in the NEXT statement. So here we get the first word of the FOR flow struct which is the address of the FOR variable, and compare it to the one we've been given in DE. If they match, then we've found the flow struct wanted and we can safely return. If not then we jump 13 bytes up the stack - 13 bytes is the size of the FOR flow struct - and loop back to try again.
+;Special treatment for FOR flow structs. Here we check that we've got the right one,
+; ie the one required by the NEXT statement which called us. When we're called by NEXT,
+; it sets DE to point to the variable in the NEXT statement. So here we get the first
+; word of the FOR flow struct which is the address of the FOR variable, and compare
+; it to the one we've been given in DE. If they match, then we've found the flow 
+;struct wanted and we can safely return. If not then we jump 13 bytes up the 
+;stack - 13 bytes is the size of the FOR flow struct - and loop back to try again.
 
         LD      C,(HL)
         INC     HL
@@ -926,10 +947,10 @@ GetFlowLoop:
         OR      E
 
         EX      DE,HL
-        JP      Z,L0292
+        JP      Z,NoVar			; NEXT без переменной (возравщвем первый попавшийся FOR)
         EX      DE,HL
         RST     CompareHLDE
-L0292:  LD      BC,000DH
+NoVar:  LD      BC,000DH		; Размер структуры FOR
         POP     HL
         RET     Z
 
@@ -938,12 +959,18 @@ L0292:  LD      BC,000DH
 		
 ;		
 ;CopyMemoryUp
-;Copies a block of memory from BC to HL. Copying is done backwards, down to and including the point where BC==DE. It goes backwards because this function is used to move blocks of memory forward by as little as a couple of bytes. If it copied forwards then the block of memory would overwrite itself.
+;Copies a block of memory from BC to HL. Copying is done backwards, 
+;down to and including the point where BC==DE. It goes backwards 
+;because this function is used to move blocks of memory forward by
+; as little as a couple of bytes. If it copied forwards then the
+; block of memory would overwrite itself.
 
 		
 CopyMemoryUp:
 	CALL    CheckEnoughMem
-L029E:  PUSH    BC
+;Exchange BC with HL, so HL now points to the source and BC points to destination.
+CopyMemoryUpNoCheck:
+	PUSH    BC
         EX      (SP),HL
         POP     BC
 CopyMemLoop:
@@ -969,7 +996,7 @@ CheckEnoughVarSpace2:
 		
         PUSH    HL
         LD      HL,(VAR_TOP)
-        LD      B,00H
+        LD      B,00H			;BC=C*4
         ADD     HL,BC
         ADD     HL,BC
         CALL    CheckEnoughMem
@@ -980,7 +1007,8 @@ CheckEnoughVarSpace2:
 ;Checks that HL is more than 32 bytes away from the stack pointer. If HL is within 32 bytes
 ;of the stack pointer then this function falls into OutOfMemory.
 
-CheckEnoughMem:  PUSH    DE
+CheckEnoughMem:
+	PUSH    DE
         EX      DE,HL
         LD      HL,0FFDAH		; HL=-34 (extra 2 bytes for return address)
         ADD     HL,SP
@@ -993,27 +1021,27 @@ CheckEnoughMem:  PUSH    DE
 ;Notice use of LXI trick.
 
 OutOfMemory:
-	LD      E,0CH
+	LD      E, ERR_OM
         JP      Error
 
 L02CA:  LD      HL,(0233H)
         LD      (CURRENT_LINE),HL
 
 SyntaxError:
-	LD      E,02H
+	LD      E, ERR_SN
 	DB		01				; LD BC,...
 DivideByZero:
-	LD      E,14H
+	LD      E, ERR_DZ
 	DB		01				; LD BC,...
-L02D6:
-	LD      E,00H
+WithoutFOR:
+	LD      E, ERR_NF
 
 ;Error
 ;Resets the stack, prints an error code (offset into error codes table is given in E), and stops program execution.
 Error:
 	CALL    ResetStack
         XOR     A
-        LD      (l0217H),A
+        LD      (ControlChar),A
         CALL    NewLine
         LD      HL,ERROR_CODES
         LD      D,A
@@ -1025,7 +1053,8 @@ Error:
         RST     NextChar
         RST     OutChar
         LD      HL, szError
-L02F1:  CALL    PrintString
+PrintInLine:
+	CALL    PrintString
         LD      HL, (CURRENT_LINE)
         LD      A,H
         AND     L
@@ -1038,29 +1067,29 @@ L02F1:  CALL    PrintString
 ;
 
 Main:
-	XOR		A
-	LD		(l0217H),A			; Включаем вывод на экран
-	LD		HL,0FFFFH			; Сбрасываем текущую выполняемую строку
-	LD		(CURRENT_LINE),HL
+	XOR	A
+	LD	(ControlChar),A			; Включаем вывод на экран (не управляющий символ)
+	LD	HL,0FFFFH			; Сбрасываем текущую выполняемую строку
+	LD	(CURRENT_LINE),HL
 
-	LD		HL,szOK				; Выводим приглашение
-	CALL		PrintString
+	LD	HL,szOK				; Выводим приглашение
+	CALL	PrintString
 
 GetNonBlankLine:
 	CALL	InputLine			; Считываем строку с клавиатуры
-	RST		NextChar					; Считываем первый символ из буфера. Флаг переноса =1, если это цифра
-	INC		A					; Проверяем на пустую строку. Инкремент/декремент не сбрасывает флаг переноса.
-	DEC		A
-	JP		Z, GetNonBlankLine	; Снова вводим строку, если пустая
+	RST	NextChar					; Считываем первый символ из буфера. Флаг переноса =1, если это цифра
+	INC	A					; Проверяем на пустую строку. Инкремент/декремент не сбрасывает флаг переноса.
+	DEC	A
+	JP	Z, GetNonBlankLine	; Снова вводим строку, если пустая
 
 	PUSH	AF					; Сохраняем флаг переноса
 	CALL	LineNumberFromStr	; Получаем номер строки в DE
 	PUSH	DE					; Запоминаем номер строки
 	CALL	Tokenize			; Запускаем токенизатор. В C возвращается длина токенизированной строки, а в А = 0
-	LD		B,A					; Теперь BC=длина строки
-	POP		DE					; Восстанавливаем номер строки
-	POP		AF					; Восстанавлливаем флаг переноса
-	JP		NC, Exec			; Если у нас строка без номера, то сразу исполняем
+	LD	B,A					; Теперь BC=длина строки
+	POP	DE					; Восстанавливаем номер строки
+	POP	AF					; Восстанавлливаем флаг переноса
+	JP	NC, Exec			; Если у нас строка без номера, то сразу исполняем
 
 ;StoreProgramLine
 ;Here's where a program line has been typed, which we now need to store in program memory.
@@ -1070,24 +1099,35 @@ StoreProgramLine:
         PUSH    BC
         RST     NextChar
         PUSH    AF
-        CALL    L0385
+        CALL    FindProgramLine
         PUSH    BC
-        JP      NC,L0341
+        JP      NC,InsertProgramLine
+
+;Carry was set by the call to FindProgramLine, meaning that the line already exists.
+; So we have to remove the old program line before inserting the new one in it's place.
+; To remove the program line we simply move the remainder of the program 
+;(ie every line that comes after it) down in memory.
+
+RemoveProgramLine:
         EX      DE,HL
         LD      HL,(VAR_BASE)
-L0333:  LD      A,(DE)
+RemoveProgramLineLoop:
+	LD      A,(DE)
         LD      (BC),A
         INC     BC
         INC     DE
         RST     CompareHLDE
-        JP      NC,L0333
+        JP      NC, RemoveProgramLineLoop
         LD      H,B
         LD      L,C
         INC     HL
         LD      (VAR_BASE),HL
-L0341:  POP     DE
+;To insert the program line, firstly the program remainder (every line that comes
+; after the one to be inserted) must be moved up in memory to make room.
+InsertProgramLine:
+	POP     DE
         POP     AF
-        JP      Z,L0368
+        JP      Z,UpdateLinkedList
         LD      HL,(VAR_BASE)
         EX      (SP),HL
         POP     BC
@@ -1105,16 +1145,23 @@ L0341:  POP     DE
         INC     HL
         LD      (HL),D
         INC     HL
-        LD      DE,01CFH
-L0360:  LD      A,(DE)
+CopyFromBuffer:
+        LD      DE,LINE_BUFFER		;Copy the line into the program
+CopyFromBufferLoop:
+	LD      A,(DE)
         LD      (HL),A
         INC     HL
         INC     DE
         OR      A
-        JP      NZ,L0360
-L0368:  CALL    ResetAll
+        JP      NZ,CopyFromBufferLoop
+
+;Now the program line has been inserted/removed, all the pointers from each line to the next need to be updated.
+
+UpdateLinkedList:
+	CALL    ResetAll
         INC     HL
-L036C:  LD      D,H
+UpdateLinkedListLoop:
+	LD      D,H
         LD      E,L
         LD      A,(HL)
         INC     HL
@@ -1124,21 +1171,26 @@ L036C:  LD      D,H
         INC     HL
         INC     HL
         XOR     A
-L0378:  CP      (HL)
+FindEndOfLine:
+	CP      (HL)
         INC     HL
-        JP      NZ,L0378
+        JP      NZ,FindEndOfLine
         EX      DE,HL
         LD      (HL),E
         INC     HL
         LD      (HL),D
         EX      DE,HL
-        JP      L036C
+        JP      UpdateLinkedListLoop
 
 ;FindProgramLine
-;Given a line number in DE, this function returns the address of that progam line in BC. If the line doesn't exist, then BC points to the next line's address, ie where the line could be inserted. Carry flag is set if the line exists, otherwise carry reset.
+;Given a line number in DE, this function returns the address of that progam line in BC.
+; If the line doesn't exist, then BC points to the next line's address, ie where the 
+;line could be inserted. Carry flag is set if the line exists, otherwise carry reset.
 		
-L0385:  LD      HL,(PROGRAM_BASE)
-L0388:  LD      B,H
+FindProgramLine:
+	LD      HL,(PROGRAM_BASE)
+FindProgramLineInMem:
+	LD      B,H
         LD      C,L
         LD      A,(HL)
         INC     HL
@@ -1147,8 +1199,8 @@ L0388:  LD      B,H
         RET     Z
 
         PUSH    BC
-        RST     30H
-        RST     30H
+        RST     PushNextWord
+        RST     PushNextWord
         POP     HL
         RST     CompareHLDE
         POP     HL
@@ -1159,7 +1211,7 @@ L0388:  LD      B,H
         CCF     
         RET     NC
 
-        JP      L0388
+        JP      FindProgramLineInMem
 		
 ;New
 ;Keyword NEW. Writes the null line number to the bottom of program storage (ie an empty program), updates pointer to variables storage,
@@ -1184,7 +1236,8 @@ New2:
 ResetAll:
 	LD      HL,(PROGRAM_BASE)
         DEC     HL
-L03AD:  LD      (PROG_PTR_TEMP),HL
+ClearAll:
+	LD      (PROG_PTR_TEMP),HL
         LD      HL,(021BH)
         LD      (022FH),HL
         CALL    Restore
@@ -1202,91 +1255,109 @@ ResetStack:
         LD      (023FH),HL
         LD      HL,(PROG_PTR_TEMP)
         XOR     A
-        LD      (0235H),A
+        LD      (NO_ARRAY),A
         PUSH    BC
         RET     
 
 ;InputLineWith'?'
 ;Gets a line of input at a '? ' prompt.
 
-InputLineWithQ:  LD      A,3FH
+InputLineWithQ:
+	LD      A, '?'
         RST     OutChar
-        LD      A,20H
+        LD      A, ' '
         RST     OutChar
         JP      InputLine
-		
-Tokenize:  XOR     A
-        LD      (021AH),A
 		
 ;Tokenize
 ;Tokenises LINE_BUFFER, replacing keywords with their IDs. On exit, C holds the length of the tokenised line plus a few bytes to make it a 
 ;complete program line.
 
-        LD      C,05H
+Tokenize:
+	XOR     A
+        LD      (DATA_STM),A
+        LD      C,05H			; Initialise line length to 5
         LD      DE,LINE_BUFFER
-L03EF:  LD      A,(HL)
+TokenizeNext:
+	LD      A,(HL)
         CP      ' '
-        JP      Z,L0439
+        JP      Z,WriteChar
         LD      B,A
         CP      '"'
-        JP      Z,L0459
+        JP      Z,FreeCopy
         OR      A
         JP      Z,Exit
-        LD      A,(021AH)
+        LD      A,(DATA_STM)
         OR      A
         LD      B,A
         LD      A,(HL)
-        JP      NZ,L0439
-        CP      3FH
-        LD      A,95H
-        JP      Z,L0439
+        JP      NZ,WriteChar
+        CP      '?'
+        LD      A, TK_PRINT		; Замена ? на PRINT
+        JP      Z, WriteChar
         LD      A,(HL)
-        CP      30H
+        CP      '0'
         JP      C,L041A
-        CP      3CH
-        JP      C,L0439
+        CP      '<'
+        JP      C,WriteChar
 L041A:  PUSH    DE
         LD      DE,KEYWORDS-1
         PUSH    HL
-        LD      A,0D7H
+        DB	3Eh		; LD      A, ...
+KwCompare:
+	RST	NextChar
         INC     DE
-L0422:  LD      A,(DE)
+KwCompareDE:  LD      A,(DE)
         AND     7FH
-        JP      Z,0436h
+        JP      Z, NotAKeyword
         CP      (HL)
-        JP      NZ,L0460
+        JP      NZ, NextKeyword
         LD      A,(DE)
         OR      A
-        JP      P,0420h
+        JP      P, KwCompare
         POP     AF
         LD      A,B
         OR      80H
-        JP      P,7EE1h
+        DB	0F2H		; JP      P,...
+;Here we have found that the input does not lead with a keyword, so we restore the input ptr and write out the literal character.
+NotAKeyword:
+	POP 	HL		; Restore input ptr
+	LD 	A, (HL)		; and get input char
         POP     DE
-L0439:  INC     HL
+WriteChar:
+	INC     HL
         LD      (DE),A
         INC     DE
         INC     C
-        SUB     3AH
+        SUB     ':'
         JP      Z,L0447
-        CP      49H
+        CP      TK_DATA-':'
         JP      NZ,L044A
-L0447:  LD      (021AH),A
-L044A:  SUB     54H
-        JP      NZ,L03EF
+L0447:  LD      (DATA_STM),A
+L044A:  SUB     TK_REM-':'
+        JP      NZ,TokenizeNext
         LD      B,A
-L0450:  LD      A,(HL)
+
+;Free copy loop. This loop copies from input to output without tokenizing, 
+;as needs to be done for string literals and comment lines. The B register
+;holds the terminating character - when this char is reached the free 
+;copy is complete and it jumps back
+	
+FreeCopyLoop:
+	LD      A,(HL)
         OR      A
         JP      Z,Exit
         CP      B
-        JP      Z,L0439
-L0459:  INC     HL
+        JP      Z,WriteChar
+FreeCopy:
+	INC     HL
 	LD      (DE),A
         INC     C
         INC     DE
-        JP      L0450
+        JP      FreeCopyLoop
 	
-L0460:  POP     HL
+NextKeyword:
+	POP     HL
         PUSH    HL
         INC     B
         EX      DE,HL
@@ -1295,9 +1366,9 @@ NextKwLoop:
         INC     HL
         JP      P,NextKwLoop
         EX      DE,HL
-        JP      L0422
+        JP      KwCompareDE
 	
-Exit:	LD      HL,01CEH
+Exit:	LD      HL,LINE_BUFFER-1
         LD      (DE),A
         INC     DE
         LD      (DE),A
@@ -1308,26 +1379,29 @@ Exit:	LD      HL,01CEH
 ;InputLine
 ;Gets a line of input into LINE_BUFFER.
 
-L0476:  DEC     B
+Backspace:
+	DEC     B
         DEC     HL
         RST     OutChar
-        JP      NZ,L0485
-L047C:  RST     OutChar
+        JP      NZ,InputNext
+ResetInput:
+	RST     OutChar
         CALL    NewLine
 InputLine:
-	LD      HL,01CFH
+	LD      HL,LINE_BUFFER
         LD      B,01H
-L0485:  CALL    L04D8
+InputNext:
+	CALL    InputChar
         CP      08H
-        JP      Z,L0476
+        JP      Z,Backspace
         CP      0DH
-        JP      Z,L07D7
+        JP      Z,TerminateInput
         CP      18H
-        JP      Z,L047C
+        JP      Z,ResetInput
         CP      7FH
-        JP      NC,L0485
+        JP      NC,InputNext
         CP      01H
-        JP      C,L0485
+        JP      C,InputNext
         NOP     
         NOP     
         NOP     
@@ -1335,18 +1409,18 @@ L0485:  CALL    L04D8
         NOP     
         LD      C,A
         LD      A,B
-        CP      48H
+        CP      72			; Длина LINE_BUFFER
         LD      A,07H
-        JP      NC,L04B3
+        JP      NC,IgnoreChar
         LD      A,C
         LD      (HL),C
         INC     HL
         INC     B
-L04B3:  RST     OutChar
-        JP      L0485
-		
-;; этот кусок не как в альтаире		
-		
+IgnoreChar:
+	RST     OutChar
+        JP      InputNext
+
+
 OutChar_tail:
 	JP      NZ,L0DC4
         POP     AF
@@ -1377,7 +1451,8 @@ L04CD:  POP     AF
 ;InputChar
 ;Gets one char of input from the user.		
 
-L04D8:  CALL    0F803h
+InputChar:
+	CALL    0F803h
         CP      1FH
         JP      Z,0F800h
         NOP     
@@ -1385,14 +1460,17 @@ L04D8:  CALL    0F803h
         CP      0FH
         RET     NZ
 
-        LD      A,(l0217H)
+        LD      A,(ControlChar)
         CPL     
-        LD      (l0217H),A
+        LD      (ControlChar),A
         RET     
 
 ;1.7 LIST Handler
 ;List
-;Lists the program. As the stored program is in tokenised form (ie keywords are represented with single byte numeric IDs) LIST is more complex than a simple memory dump. When it meets a keyword ID it looks it up in the keywords table and prints it.
+;Lists the program. As the stored program is in tokenised form 
+;(ie keywords are represented with single byte numeric IDs) LIST
+; is more complex than a simple memory dump. When it meets a 
+;keyword ID it looks it up in the keywords table and prints it.
 
 	ORG	04EEH
 List:
@@ -1400,56 +1478,62 @@ List:
         RET     NZ
 
         POP     BC
-        CALL    L0385
+        CALL    FindProgramLine
         PUSH    BC
-L04F7:  POP     HL
-        RST     30H
+ListNextLine:
+	POP     HL
+        RST     PushNextWord
 L04F9:  POP     BC
         LD      A,B
         OR      C
         JP      Z,Main
-        CALL    L05E5
+        CALL    TestBreakKey
         PUSH    BC
         CALL    NewLine
-        RST     30H
+        RST     PushNextWord
         EX      (SP),HL
         CALL    PrintInt
-        LD      A,20H
+        LD      A,' '
 L050D:  POP     HL
-L050E:  RST     OutChar
+ListChar:
+	RST     OutChar
         LD      A,(HL)
         OR      A
         INC     HL
-        JP      Z,L04F7
-        JP      P,L050E
+        JP      Z,ListNextLine
+        JP      P,ListChar
         SUB     7FH
         LD      C,A
         PUSH    HL
         LD      DE, KEYWORDS
 L051F:  PUSH    DE
-L0520:  LD      A,(DE)
+ToNextKeyword:
+	LD      A,(DE)
         INC     DE
         OR      A
-        JP      P,L0520
+        JP      P,ToNextKeyword
         DEC     C
         POP     HL
         JP      NZ,L051F
-L052B:  LD      A,(HL)
+PrintKeyword:
+	LD      A,(HL)
         OR      A
         JP      M,L050D
         RST     OutChar
         INC     HL
-        JP      L052B
+        JP      PrintKeyword
 
 ;1.8 FOR Handler
 ;For
-;Although FOR indicates the beginning of a program loop, the handler only gets called the once. Subsequent iterations of the loop return to the following statement or program line, not the FOR statement itself.
+;Although FOR indicates the beginning of a program loop, the handler only gets 
+;called the once. Subsequent iterations of the loop return to the following
+;statement or program line, not the FOR statement itself.
 
 	ORG	0535H
 For:		
         LD      A,64H
-        LD      (0235H),A
-        CALL    L0710
+        LD      (NO_ARRAY),A
+        CALL    Let
         EX      (SP),HL
         CALL    GetFlowPtr
         POP     DE
@@ -1460,48 +1544,50 @@ L0547:  EX      DE,HL
         CALL    CheckEnoughVarSpace2
         DB	08H
         PUSH    HL
-        CALL    L06F9
+        CALL    FindNextStatement
         EX      (SP),HL
         PUSH    HL
         LD      HL,(CURRENT_LINE)
         EX      (SP),HL
         CALL    L0969
         RST     SyntaxCheck
-        DB	9Eh
+        DB	TK_TO
         CALL    L0966
         PUSH    HL
         CALL    FCopyToBCDE
         POP     HL
         PUSH    BC
         PUSH    DE
+;Initialise the STEP value in BCDE to 1.
         LD      BC,8100H
         LD      D,C
         LD      E,D
         LD      A,(HL)
-        CP      0A3H
+        CP      TK_STEP
         LD      A,01H
-        JP      NZ,L057C
+        JP      NZ,PushStepValue
         RST     NextChar
         CALL    L0966
         PUSH    HL
         CALL    FCopyToBCDE
         POP     HL
         RST     FTestSign
-L057C:  PUSH    BC
+PushStepValue:
+	PUSH    BC
         PUSH    DE
         PUSH    AF
         INC     SP
         
-		PUSH    HL
-		
-		
+	PUSH    HL
+	
+	
         LD      HL,(PROG_PTR_TEMP)
         EX      (SP),HL
-L0585:  LD      B,81H
+EndOfForHandler:
+	LD      B,TK_FOR
         PUSH    BC
         INC     SP
-		
-		
+
 ;		
 ;1.9 Execution
 ;ExecNext
@@ -1510,12 +1596,12 @@ L0585:  LD      B,81H
 ;
 
 ExecNext:
-	CALL    0F812h
-        NOP
-        CALL    NZ,L05EA
+	CALL    0F812h			;---------------
+        NOP				; !! Этот блок можно заменить одним вызовом
+        CALL    NZ,CheckBreak		;---------------
         LD      (PROG_PTR_TEMP),HL
         LD      A,(HL)
-        CP      3AH
+        CP      ':'
         JP      Z,Exec
         OR      A
         JP      NZ,SyntaxError
@@ -1524,7 +1610,7 @@ ExecNext:
         INC     HL
         OR      (HL)
         INC     HL
-        JP      Z,L05F6
+        JP      Z,EndOfProgram
         LD      E,(HL)
         INC     HL
         LD      D,(HL)
@@ -1539,13 +1625,15 @@ ExecNext:
 Exec:	RST     NextChar
         LD      DE,ExecNext
         PUSH    DE
-L05B2:  RET     Z
+ExecANotZero:
+	RET     Z
 
-L05B3:  SUB     80H
-        JP      C,L0710
-        CP      1DH
+ExecA:
+	SUB     80H
+        JP      C,Let
+        CP      TKCOUT
         JP      NC,SyntaxError
-        RLCA    
+        RLCA    			;	BC = A*2
         LD      C,A
         LD      B,00H
         EX      DE,HL
@@ -1557,9 +1645,11 @@ L05B3:  SUB     80H
         PUSH    BC
         EX      DE,HL
 		
-L05CB:  INC     HL
+; ЭТо дублирующий код из RST NextChar
+NextChar2:
+	INC     HL
         LD      A,(HL)
-        CP      3AH
+        CP      ':'
         RET     NC
 
 
@@ -1567,9 +1657,9 @@ L05CB:  INC     HL
 ;NextChar_tail
 
 NextChar_tail:
-	CP      20H
-        JP      Z,L05CB
-        CP      30H
+	CP      ' '
+        JP      Z,NextChar2
+        CP      '0'
         CCF     
         INC     A
         DEC     A
@@ -1595,11 +1685,13 @@ L05E0:  LD      (DATA_PROG_PTR),HL
 ; the break key (0x03) and jumps to Stop. Since the first instruction 
 ;at Stop is RNZ, this will return at once if the user pressed some other key.
 
-L05E5:  CALL    0F812h
+TestBreakKey:
+	CALL    0F812h
         NOP     
         RET     Z
 
-L05EA:  CALL    L04D8
+CheckBreak:
+	CALL    InputChar
         CP      03H
 	
 	ORG	05efh
@@ -1609,7 +1701,8 @@ Stop:
         OR      0C0H
         LD      (PROG_PTR_TEMP),HL
 L05F5:  POP     BC
-L05F6:  PUSH    AF
+EndOfProgram:
+	PUSH    AF
         LD      HL,(CURRENT_LINE)
         LD      A,L
         AND     H
@@ -1619,17 +1712,17 @@ L05F6:  PUSH    AF
         LD      HL,(PROG_PTR_TEMP)
         LD      (023FH),HL
 L0609:  XOR     A
-        LD      (l0217H),A
+        LD      (ControlChar),A
         POP     AF
         LD      HL, szStop
-        JP      NZ,L02F1
+        JP      NZ, PrintInLine
         JP      Main
 
 	ORG	0617H
 Cont:	
         RET     NZ
 
-        LD      E,20H
+        LD      E,ERR_CN
         LD      HL,(023FH)
         LD      A,H
         OR      L
@@ -1646,7 +1739,7 @@ Cont:
 
         INC     A
         CP      48H
-        JP      NC,L065C
+        JP      NC,FunctionCallError
         LD      (TERMINAL_Y),A
         RET     
 ;
@@ -1655,10 +1748,10 @@ Cont:
 ;
 CharIsAlpha:
 	LD      A,(HL)
-        CP      41H
+        CP      'A'
         RET     C
 
-        CP      5BH
+        CP      'Z'+1
         CCF
         RET
 
@@ -1666,32 +1759,41 @@ CharIsAlpha:
 ;GetSubscript
 ;Gets the subscript of an array variable encountered in an expression or a DIM declaration. The subscript is returned as a positive integer in CDE.
 
-L0641:  RST     NextChar
+GetSubscript:
+	RST     NextChar
 L0642:  CALL    L0966
 L0645:  RST     FTestSign
-        JP      M,L065C
+        JP      M,FunctionCallError
 L0649:  LD      A,(FACCUM+3)
         CP      90H
-        JP      C,L1367
+        JP      C,FAsInteger
         LD      BC,9080H
         LD      DE,0000H
-        CALL    L133C
+        CALL    FCompare
         LD      D,C
         RET     Z
 
-L065C:  LD      E,08H
+FunctionCallError:
+	LD      E,ERR_FC
         JP      Error
 		
 ;1.11 Jumping to Program Lines
 ;LineNumberFromStr
-;Gets a line number from a string pointer. The string pointer is passed in in HL, and the integer result is returned in DE. Leading spaces are skipped over, and it returns on finding the first non-digit. The largest possible line number is 65529 - it syntax errors out if the value of the first four digits is more then 6552.
+;Gets a line number from a string pointer. The string pointer is passed in in HL,
+; and the integer result is returned in DE. Leading spaces are skipped over, and 
+;it returns on finding the first non-digit. The largest possible line number is 
+;65529 - it syntax errors out if the value of the first four digits is more then 6552.
 
-;One interesting feature of this function is that it returns with Z set if it found a valid number (or the string was empty), or NZ if the string didn't lead with a number.
+;One interesting feature of this function is that it returns with Z set if it
+; found a valid number (or the string was empty), or NZ if the string
+; didn't lead with a number.
 		
 LineNumberFromStr:
 	DEC     HL
-L0662:  LD      DE,0000H
-L0665:  RST     NextChar
+LineNumberFromStr2:
+	LD      DE,0000H
+NextLineNumChar:
+	RST     NextChar
         RET     NC
 
         PUSH    HL
@@ -1706,17 +1808,17 @@ L0665:  RST     NextChar
         ADD     HL,DE
         ADD     HL,HL
         POP     AF
-        SUB     30H
+        SUB     '0'
         LD      E,A
         LD      D,00H
         ADD     HL,DE
         EX      DE,HL
         POP     HL
-        JP      L0665
+        JP      NextLineNumChar
 	
 	ORG	0682H
 Clear:
-        JP      Z,L03AD
+        JP      Z,ClearAll
         CALL    L0642
         DEC     HL
         RST     NextChar
@@ -1739,15 +1841,18 @@ Clear:
         EX      DE,HL
         LD      (STACK_TOP),HL
         POP     HL
-        JP      L03AD
+        JP      ClearAll
 ;;;		
 	ORG	06ABH
 Run:
         JP      Z,ResetAll
-        CALL    L03AD
+        CALL    ClearAll
         LD      BC,ExecNext
-        JP      L06C6
-		
+        JP      GosubBC
+	
+;Gosub
+;Gosub sets up a flow struct on the stack and then falls into Goto. The flow struct is KWID_GOSUB, preceded by the line number of the gosub statement, in turn preceded by prog ptr to just after the gosub statement.
+	
 	ORG	06B7H
 Gosub:
         CALL    CheckEnoughVarSpace2
@@ -1757,11 +1862,16 @@ Gosub:
         PUSH    HL
         LD      HL,(CURRENT_LINE)
         EX      (SP),HL
-        LD      D,8CH
+        LD      D,TK_GOSUB
         PUSH    DE
         INC     SP
-L06C6:  PUSH    BC
+;Push return address preserved in BC, and fall into GOTO.
+GosubBC:  PUSH    BC
 
+;Goto
+;Sets program execution to continue from the line number argument.
+
+;Get line number argument in DE and return NZ indicating syntax error if the argument was a non-number .
 	ORG	06C7H
 Goto:
 	CALL    LineNumberFromStr
@@ -1771,14 +1881,14 @@ Goto:
         RST     CompareHLDE
         POP     HL
         INC     HL
-        CALL    C,L0388
-        CALL    NC,L0385
+        CALL    C,FindProgramLineInMem
+        CALL    NC,FindProgramLine
         LD      H,B
         LD      L,C
         DEC     HL
         RET     C
 
-        LD      E,0EH
+        LD      E,ERR_US
         JP      Error
 		
 		
@@ -1787,12 +1897,14 @@ Goto:
 
 	ORG	06e3h
 Return:
+
+;No arguments allowed.
         RET     NZ
         LD      D,0FFH
         CALL    GetFlowPtr
         LD      SP,HL
-        CP      8CH
-        LD      E,04H
+        CP      TK_GOSUB
+        LD      E,ERR_RG
         JP      NZ,Error
         POP     HL
         LD      (CURRENT_LINE),HL
@@ -1806,21 +1918,23 @@ Return:
 ;FindNextStatement
 ;Finds the end of the statement or the end of the program line.
 
-;BUG: There is an interesting bug in this block, although it's harmless as by luck it's impossible to see it. The byte at 04F7 is 0x10, an illegal instruction, which is in turn followed by a NOP. This illegal instruction is almost certainly supposed to be 0x0E, so as to become the two-byte instruction MOV C,00. If this were the case it would make perfect sense as the loop reads ahead until it finds a null byte terminating the line or whatever the C register is loaded with.
 
-;04F7 is jumped to in two places - it is the REM handler, and also when an IF statement's condition evals to false and the rest of the line needs to be skipped. Luckily in both these cases, C just happens to be loaded with a byte that cannot occur in the program so the null byte marking the end of the line is found as expected.
+;Rem is jumped to in two places - it is the REM handler, and also when an IF statement's condition evals to false and the rest of the line needs to be skipped. Luckily in both these cases, C just happens to be loaded with a byte that cannot occur in the program so the null byte marking the end of the line is found as expected.
 
 Data:
-L06F9:  DB		01H
-		DB		3AH			;LD      BC,..3AH
-Rem:		
-		DB		0EH		;LD		C, 0
+FindNextStatement:
+	DB	01H
+	DB	':'		;LD      BC,..3AH
+Rem:
+	DB	0EH		;LD		C, 0
         NOP     
         LD      B,00H
-L06FF:  LD      A,C
+ExcludeQuote:
+	LD      A,C
         LD      C,B
         LD      B,A
-L0702:  LD      A,(HL)
+FindNextStatementLoop:
+	LD      A,(HL)
         OR      A
         RET     Z
 
@@ -1828,17 +1942,17 @@ L0702:  LD      A,(HL)
         RET     Z
 
         INC     HL
-        CP      22H
-        JP      Z,L06FF
-        JP      L0702
+        CP      '"'
+        JP      Z,ExcludeQuote
+        JP      FindNextStatementLoop
 
 ;1.12 Assigning Variables
 ;Let
 ;Assigns a value to a variable.
 
-L0710:  CALL    GetVar
+Let:	CALL    GetVar
         RST     SyntaxCheck
-        DB	0ACH			; '='
+        DB	TK_EQ			; '='
         LD      A,(0219H)
         PUSH    AF
         PUSH    DE
@@ -1856,7 +1970,7 @@ L072B:  PUSH    HL
         PUSH    HL
         INC     HL
         INC     HL
-        RST     30H
+        RST     PushNextWord
         POP     DE
         LD      HL,(STACK_TOP)
         RST     CompareHLDE
@@ -1886,6 +2000,30 @@ L0755:  PUSH    HL
         POP     HL
         RET     
 
+; Обработчик ON x GOTO/ON x GOSUB
+
+	ORG	075Ch
+On:
+        CALL    L0FB9
+        LD      A,(HL)
+        LD      B,A
+        CP      TK_GOSUB
+        JP      Z,OkToken
+        RST     SyntaxCheck
+        DB	TK_GOTO
+        DEC     HL
+OkToken:
+	LD      C,E
+OnLoop:
+	DEC     C
+        LD      A,B
+        JP      Z,ExecA
+        CALL    LineNumberFromStr2
+        CP      ','
+        RET     NZ
+
+        JP      OnLoop
+
 ;1.13 IF Keyword Handler
 ;If
 ;Evaluates a condition. A condition has three mandatory parts : a left-hand side expression, a comparison operator, and a right-hand side expression. Examples are 'A=2', 'B<=4' and so on.
@@ -1894,40 +2032,26 @@ L0755:  PUSH    HL
 
 ;You can therefore get away with stupid operators such as '>>>>>' (value 1, the same as a single '>') and '>=<' (value 7), the latter being particularly dense as it causes the condition to always evaluate to true.
 
-	ORG	075Ch
-On:
-        CALL    L0FB9
-        LD      A,(HL)
-        LD      B,A
-        CP      8CH
-        JP      Z,L0769
-        RST     SyntaxCheck
-        DB	088h
-        DEC     HL
-L0769:  LD      C,E
-L076A:  DEC     C
-        LD      A,B
-        JP      Z,L05B3
-        CALL    L0662
-        CP      2CH
-        RET     NZ
-
-        JP      L076A
-
 	ORG	0778h
 If:
         CALL    EvalExpression
         LD      A,(HL)
-        CP      88H
-        JP      Z,L0784
+        CP      TK_GOTO			; !!Добавить IF x GOSUB
+        JP      Z, NoThen
         RST     SyntaxCheck
-        DB	0A1h
+        DB	TK_THEN
         DEC     HL
-L0784:  RST     FTestSign
+NoThen:
+	RST     FTestSign
         JP      Z,Rem
+
+;Condition evaluated to True. Here we get the first character of the THEN statement,
+; and if it's a digit then we jump to GOTO's handler as it's an implicit GOTO. 
+;Otherwise we jump to near the top of Exec to run the THEN statement.
+	
         RST     NextChar
-        JP      C,Goto
-        JP      L05B2
+        JP      C,Goto			; Если число, то это GOTO
+        JP      ExecANotZero		; Если конец строки, то возврат, иначе исполняем команду
 		
 ;1.14 Printing
 ;Print
@@ -1936,21 +2060,22 @@ L0784:  RST     FTestSign
 ;(comma, semi-colon, or the TAB keyword).
 		
         DEC     HL
-L0790:  RST     NextChar
+PrintLoop:
+	RST     NextChar
 
 	ORG	0791H
 Print:
         JP      Z,NewLine
 L0794:  RET     Z
 
-        CP      9DH
-        JP      Z,L0808
-        CP      9FH
-        JP      Z,L0808
+        CP      TK_TAB
+        JP      Z,Tab
+        CP      TK_SPC
+        JP      Z,Tab
         PUSH    HL
-        CP      2CH
+        CP      ','
         JP      Z,L07F4
-        CP      3BH
+        CP      ';'
         JP      Z,ExitTab
         POP     BC
         CALL    EvalExpression
@@ -1964,21 +2089,23 @@ L0794:  RET     Z
         LD      HL,(FACCUM)
         LD      A,(TERMINAL_X)
         ADD     A,(HL)
-        CP      40H
+        CP      '@'
         CALL    NC,NewLine
         CALL    L0D96
-        LD      A,20H
+        LD      A, ' '
         RST     OutChar
         XOR     A
 L07D0:  CALL    NZ,L0D96
         POP     HL
-        JP      L0790
+        JP      PrintLoop
 		
 ;TerminateInput
-;HL points to just beyond the last byte of a line of user input. Here we write a null byte to terminate it, reset HL to point to the start of the input line buffer, then fall into NewLine.
+;HL points to just beyond the last byte of a line of user input. Here we write a null byte to terminate it,
+; reset HL to point to the start of the input line buffer, then fall into NewLine.
 		
-L07D7:  LD      (HL),00H
-        LD      HL,01CEH
+TerminateInput:
+	LD      (HL),00H
+        LD      HL,LINE_BUFFER-1
 		
 ;NewLine
 ;Prints carriage return + line feed, plus a series of nulls which was probably due to some peculiarity of the teletypes of the day.
@@ -2014,33 +2141,34 @@ L07FF:  SUB     0EH
         CPL     
         JP      L081F
 		
-;Tab
+;Tab и Spc
 ;Tabulation. The TAB keyword takes an integer argument denoting the absolute column to print spaces up to.
 		
 Tab:
-L0808:  PUSH    AF
-        CALL    0FB8h
+	PUSH    AF
+        CALL    L0FB8
         RST     SyntaxCheck
-        DB	29h
+        DB	')'
         DEC     HL
         POP     AF
-        CP      9FH
+        CP      TK_SPC
         PUSH    HL
         LD      A,E
-        JP      Z,L0820
+        JP      Z,Spc
         LD      A,(TERMINAL_X)
         CPL     
         ADD     A,E
         JP      NC,ExitTab
-PrintSpaces:	
+PrintSpaces:
 L081F:  INC     A
 
-L0820:  LD      B,A
-        LD      A,20H
+Spc:	
+	LD      B,A
+        LD      A, ' '
 PrintSpaceLoop:
-L0823:  RST     OutChar
+	RST     OutChar
         DEC     B
-        JP      NZ,L0823
+        JP      NZ,PrintSpaceLoop
 ExitTab:
 	POP     HL
         RST     NextChar
@@ -2062,7 +2190,7 @@ L0840:  LD      A,(INPUT_OR_READ)
 Input:
         CP      22H
         LD      A,00H
-        LD      (l0217H),A
+        LD      (ControlChar),A
         JP      NZ,L0866
         CALL    L0D50
         RST     SyntaxCheck
@@ -2155,14 +2283,14 @@ szOverflow:
 	DB	3Fh, 6Ch, 69h, 7Bh, 6Eh, 69h, 65h, 20h, 64h, 61h, 6Eh, 6Eh, 79h, 0E5h, 0Dh, 0Ah, 00h	; "?ЛИШНИЕ ДАННЫЕ"
 
 ReadError:
-	CALL    L06F9
+	CALL    FindNextStatement
         OR      A
         JP      NZ,L0914
         INC     HL
-        RST     30H
+        RST     PushNextWord
         LD      A,C
         OR      B
-        LD      E,06H
+        LD      E,ERR_OD
         JP      Z,Error
         POP     BC
         LD      E,(HL)
@@ -2186,7 +2314,7 @@ Next:
 L0920:  CALL    NZ,GetVar
         LD      (PROG_PTR_TEMP),HL
         CALL    GetFlowPtr
-        JP      NZ,L02D6
+        JP      NZ,WithoutFOR
         LD      SP,HL
         PUSH    DE
         LD      A,(HL)
@@ -2202,7 +2330,7 @@ L0920:  CALL    NZ,GetVar
         POP     HL
         CALL    FLoadBCDEfromMem
         PUSH    HL
-        CALL    L133C
+        CALL    FCompare
         POP     HL
         POP     BC
         SUB     B
@@ -2212,7 +2340,8 @@ L0920:  CALL    NZ,GetVar
         LD      (CURRENT_LINE),HL
         LD      L,C
         LD      H,B
-        JP      L0585
+        JP      EndOfForHandler
+	
 L0958:  LD      SP,HL
         LD      HL,(PROG_PTR_TEMP)
         LD      A,(HL)
@@ -2226,7 +2355,7 @@ L096B:  LD      A,(0219H)
         ADC     A,A
         RET     PE
 
-        LD      E,18H
+        LD      E,ERR_TM
         JP      Error
 
 ;1.17 Expression Evaluation
@@ -2299,7 +2428,7 @@ L09D2:  PUSH    BC
         CALL    FPush
         LD      E,B
         LD      D,C
-        RST     30H
+        RST     PushNextWord
         LD      HL,(0231H)
         JP      L0978
 	
@@ -2444,14 +2573,14 @@ L0A9E:  LD      HL,0AB0H
         CALL    L096B
         LD      HL,0AEFH
         PUSH    HL
-        JP      Z,L133C
+        JP      Z,FCompare
         XOR     A
         LD      (0219H),A
         PUSH    DE
         CALL    L0EC1
         POP     DE
-        RST     30H
-        RST     30H
+        RST     PushNextWord
+        RST     PushNextWord
         CALL    L0EC5
         CALL    FLoadBCDEfromMem
         POP     HL
@@ -2545,12 +2674,12 @@ L0B3F:  SUB     24H
         ADD     A,C
         LD      C,A
         RST     NextChar
-L0B4C:  LD      A,(0235H)
+L0B4C:  LD      A,(NO_ARRAY)
         ADD     A,(HL)
         CP      28H
         JP      Z,L0B9E
         XOR     A
-        LD      (0235H),A
+        LD      (NO_ARRAY),A
         PUSH    HL
         LD      HL,(VAR_ARRAY_BASE)
         EX      DE,HL
@@ -2603,7 +2732,7 @@ L0B9E:  PUSH    HL
         LD      D,00H
 L0BA5:  PUSH    DE
         PUSH    BC
-        CALL    L0641
+        CALL    GetSubscript
         POP     BC
         POP     AF
         EX      DE,HL
@@ -2642,12 +2771,12 @@ L0BD8:  INC     HL
         JP      NZ,0BC6h
         LD      A,(0218H)
         OR      A
-        LD      E,12H
+        LD      E,ERR_DD
         JP      NZ,Error
         POP     AF
         CP      (HL)
         JP      Z,L0C52
-L0BEE:  LD      E,10H
+L0BEE:  LD      E,ERR_BS
         JP      Error
 L0BF3:  LD      DE,0004H
         LD      (HL),C
@@ -2776,7 +2905,7 @@ L0CAB:  LD      B,A
 	ORG	0CB0h
 Def:
         CALL    L0D10
-        LD      BC,L06F9
+        LD      BC,FindNextStatement
         PUSH    BC
         PUSH    DE
         CALL    L0D02
@@ -2798,12 +2927,12 @@ L0CCD:  CALL    L0D10
         CALL    L0A16
         CALL    L0969
         EX      (SP),HL
-        RST     30H
+        RST     PushNextWord
         POP     DE
-        RST     30H
+        RST     PushNextWord
         POP     HL
-        RST     30H
-        RST     30H
+        RST     PushNextWord
+        RST     PushNextWord
         DEC     HL
         DEC     HL
         DEC     HL
@@ -2811,7 +2940,7 @@ L0CCD:  CALL    L0D10
         PUSH    HL
         RST     CompareHLDE
         PUSH    DE
-        LD      E,22H
+        LD      E,ERR_UF
         JP      Z,Error
         CALL    FCopyToMem
         POP     HL
@@ -2840,12 +2969,12 @@ L0D02:  PUSH    HL
         POP     HL
         RET     NZ
 
-        LD      E,16H
+        LD      E,ERR_ID
         JP      Error
 L0D10:  RST     SyntaxCheck
         DB	0a0h
         LD      A,80H
-        LD      (0235H),A
+        LD      (NO_ARRAY),A
         OR      (HL)
         LD      B,A
         CALL    L0B1F
@@ -2865,7 +2994,7 @@ L0D2F:  LD      A,(HL)
         PUSH    HL
         CALL    L0DAA
         POP     HL
-        RST     30H
+        RST     PushNextWord
         POP     BC
         CALL    L0D46
         PUSH    HL
@@ -2895,7 +3024,7 @@ L0D56:  INC     HL
         CP      B
         JP      NZ,L0D56
 L0D65:  CP      22H
-        CALL    Z,L05CB
+        CALL    Z,NextChar2
         EX      (SP),HL
         INC     HL
         EX      DE,HL
@@ -2910,7 +3039,7 @@ L0D75:  LD      DE,022BH
         LD      (0219H),A
         CALL    L131C
         RST     CompareHLDE
-        LD      E,1EH
+        LD      E,ERR_ST
         JP      Z,Error
         LD      (021DH),HL
         POP     HL
@@ -2953,7 +3082,7 @@ L0DC4:  POP     AF
         RET     
 
 L0DC6:  POP     AF
-        LD      E,1AH
+        LD      E,ERR_SO
         JP      Z,Error
         CP      A
         PUSH    AF
@@ -3011,8 +3140,8 @@ L0E06:  EX      DE,HL
         LD      BC,0E23H
 L0E2F:  PUSH    BC
         OR      80H
-L0E32:  RST     30H
-        RST     30H
+L0E32:  RST     PushNextWord
+        RST     PushNextWord
         POP     DE
         POP     BC
         RET     P
@@ -3068,7 +3197,7 @@ L0E52:  POP     DE
         LD      B,H
         LD      C,L
         LD      HL,(022FH)
-        CALL    L029E
+        CALL    CopyMemoryUpNoCheck
         POP     HL
         LD      (HL),C
         INC     HL
@@ -3089,7 +3218,7 @@ L0E77:  PUSH    BC
         LD      HL,(FACCUM)
         PUSH    HL
         ADD     A,(HL)
-        LD      E,1CH
+        LD      E,ERR_LS
         JP      C,Error
         CALL    L0D43
         POP     DE
@@ -3107,8 +3236,8 @@ L0E77:  PUSH    BC
         JP      L0D75
 L0EAE:  POP     HL
         EX      (SP),HL
-        RST     30H
-        RST     30H
+        RST     PushNextWord
+        RST     PushNextWord
         POP     BC
         POP     HL
 L0EB4:  INC     L
@@ -3164,10 +3293,10 @@ L0EEB:  CALL    L0EBE
 	ORG	0ef6h
 Asc:
         CALL    L0EEB
-        JP      Z,L065C
+        JP      Z,FunctionCallError
         INC     HL
         INC     HL
-        RST     30H
+        RST     PushNextWord
         POP     HL
         LD      A,(HL)
         JP      L0CAB
@@ -3296,7 +3425,7 @@ L0FA2:  POP     BC
         LD      B,E
         INC     B
         DEC     B
-        JP      Z,L065C
+        JP      Z,FunctionCallError
         RET     
 
 L0FAC:  CALL    L0FB9
@@ -3304,12 +3433,13 @@ L0FAC:  CALL    L0FB9
         LD      (0F84H),A
         RST     SyntaxCheck
         DB	2ch
-        LD      B,0D7H
+        DB	06h	;LD      B,..
+L0FB8:	RST	NextChar
 L0FB9:  CALL    L0966
 L0FBC:  CALL    L0645
         LD      A,D
         OR      A
-        JP      NZ,L065C
+        JP      NZ,FunctionCallError
         DEC     HL
         RST     NextChar
         LD      A,E
@@ -3322,7 +3452,7 @@ Val:
         LD      E,A
         INC     HL
         INC     HL
-        RST     30H
+        RST     PushNextWord
         LD      H,B
         LD      L,C
         ADD     HL,DE
@@ -3409,7 +3539,7 @@ L1040:  CALL    Reader
 L1051:  LD      (VAR_BASE),HL
         LD      HL,szOK
         CALL    PrintString
-        JP      L0368
+        JP      UpdateLinkedList
 
         CALL    L0645
         LD      A,(DE)
@@ -3549,7 +3679,7 @@ L111A:  INC     E
         INC     (HL)
         RET     NZ
 
-L1124:  LD      E,0AH
+L1124:  LD      E,ERR_OV
         JP      Error
 L1129:  LD      A,(HL)
         ADD     A,E
@@ -3627,7 +3757,7 @@ L115F:  RRA
 	ORG	117eh
 Log:
 L117E:  RST     FTestSign
-        JP      PE,L065C
+        JP      PE,FunctionCallError
         LD      HL,FACCUM+3
         LD      A,(HL)
         LD      BC,8035H
@@ -3985,7 +4115,8 @@ L1327:  LD      HL,024FH
         XOR     (HL)
         RET     
 
-L133C:  LD      A,B
+FCompare:
+	LD      A,B
         OR      A
         JP      Z, FTestSign
         LD      HL,12CEH
@@ -4028,7 +4159,8 @@ L1354:  INC     HL
         POP     HL
         RET     
 
-L1367:  LD      B,A
+FAsInteger:
+	LD      B,A
         LD      C,A
         LD      D,A
         LD      E,A
@@ -4075,7 +4207,7 @@ L1392:  LD      HL,FACCUM+3
         RET     NC
 
         LD      A,(HL)
-        CALL    L1367
+        CALL    FAsInteger
         LD      (HL),98H
         LD      A,E
         PUSH    AF
@@ -4288,7 +4420,7 @@ L147C:  INC     HL
         CALL    L152B
 L148B:  LD      BC,9143H
         LD      DE,4FF8H
-        CALL    L133C
+        CALL    FCompare
         JP      PO,L14A8
         POP     AF
         CALL    L1428
@@ -4301,7 +4433,7 @@ L149F:  CALL    L120C
         CALL    L152B
 L14A8:  CALL    L1070
         INC     A
-        CALL    L1367
+        CALL    FAsInteger
         CALL    FLoadFromBCDE
         LD      BC,0206H
         POP     AF
@@ -4383,7 +4515,7 @@ L1528:  LD      (HL),C
 
 L152B:  LD      BC,9474H
         LD      DE,23F7H
-        CALL    L133C
+        CALL    FCompare
         POP     HL
         JP      PO,L149F
         JP      (HL)
@@ -4437,7 +4569,7 @@ FPower:
         POP     BC
         POP     DE
         PUSH    AF
-        CALL    L133C
+        CALL    FCompare
         POP     HL
         LD      A,H
         RRA     
@@ -4753,10 +4885,10 @@ L176A:  CALL    L0FB9
         CALL    L0FB9
         LD      (1958H),A
         CP      20H
-        JP      NC,L065C
+        JP      NC,FunctionCallError
         LD      A,(1957H)
         CP      40H
-        JP      NC,L065C
+        JP      NC,FunctionCallError
         PUSH    HL
         LD      HL,(0F75AH)
         LD      DE,0F801H
@@ -4811,10 +4943,10 @@ Plot:
         LD      (1956H),A
 L17DD:  LD      A,(1954H)
         CP      80H
-        JP      NC,L065C
+        JP      NC,FunctionCallError
         LD      A,(1955H)
         CP      40H
-        JP      NC,L065C
+        JP      NC,FunctionCallError
         LD      D,A
         LD      A,3FH
         SUB     D
