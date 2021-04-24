@@ -78,8 +78,8 @@
 ;
 ; 81 " I=1" 95 " 10"
 ;
-; Which is 0x81 (keyword ID for 'FOR') followed by the string " I=1", followed by 0x95 (keyword ID for 'TO') followed by the string " 10".
-; This is 9 bytes, compared to 13 bytes for the untokenised input.
+; Здесь 081H - идентификатор для FOR, далее следует строка " I=1", после которой - идентификатор 095H для TO, и оканчивается
+; строкой " 10". Всего 9 bytes вместо 13 байт для нетокенизированной строки.
 ;
 ; This particular example line of input is meaningless unless it is part of a larger program. As you should know already,
 ; each line of a program is prefixed with a line number. These line numbers get stored as 16-bit integers preceding the
@@ -200,7 +200,7 @@ END	EQU	0	; Поддержка команды END
 
 ; Начало (RST 0)
 
-; Запус осуществляется с адреса 0. Проводится инициализация стека и
+; Запуск осуществляется с адреса 0. Проводится инициализация стека и
 ; переход address 0000, the very start of the program. Not much needs to be done here - just 
 ; disable interrupts and jump up to the Init section in upper memory. Notice that the
 ; jump address here is coloured red, indicating the code is modified by code elsewhere.
@@ -301,7 +301,7 @@ RST6_CONT:
 	INC	HL
 	PUSH    BC
 RST6RET:
-	JP	L04F9		; Это самомодифицирующийся код
+	JP	04F9H		; Это самомодифицирующийся код
 
 
 ; токены и прочие данные
@@ -484,7 +484,7 @@ TK_END	EQU	Q
 	ENDIF
 ;Supplementary keywords
 Q	SET	Q+1
-TKCOUT	EQU	Q-80H
+TKCOUNT	EQU	Q-80H
 TK_TAB	EQU	Q
 	DB 	"TAB", '('+80h	;	9d
 Q	SET	Q+1
@@ -884,7 +884,8 @@ VAR_TOP
 DATA_PROG_PTR
 	DW	2200h
 FACCUM:	DB	1fh,02h,84h,87h	; Видимо, мусор. Заменить на DD	0 ?
-	db 	0c2h, 20h
+FTEMP:	DB	0c2h
+	db	20h
 	db	32h, 35h,36h, 0 ; "256"
 	db	30h, 30h,30h, 0	; "000"
 	ORG	025bh
@@ -1425,14 +1426,16 @@ OutChar_tail:
 	JP      NZ,L0DC4
         POP     AF
         PUSH    AF
-        CP      20H
+        CP      ' '
         JP      C,L04CD
         LD      A,(TERMINAL_X)
 ;;
 
 ;1.6 Terminal I/O
 ;OutChar_tail
-;Prints a character to the terminal. On entry, the char to be printed is on the stack and A holds TERMINAL_X. If the current line is up to the maximum width then we print a new line and update the terminal position. Then we print the character - to do this we loop until the device is ready to receive a char and then write it out.
+;Prints a character to the terminal. On entry, the char to be printed is on the stack and A holds TERMINAL_X. 
+;If the current line is up to the maximum width then we print a new line and update the terminal position.
+; Then we print the character - to do this we loop until the device is ready to receive a char and then write it out.
 
         CP      48H
         CALL    Z,NewLine
@@ -1483,7 +1486,7 @@ List:
 ListNextLine:
 	POP     HL
         RST     PushNextWord
-L04F9:  POP     BC
+	POP     BC
         LD      A,B
         OR      C
         JP      Z,Main
@@ -1631,7 +1634,7 @@ ExecANotZero:
 ExecA:
 	SUB     80H
         JP      C,Let
-        CP      TKCOUT
+        CP      TKCOUNT
         JP      NC,SyntaxError
         RLCA    			;	BC = A*2
         LD      C,A
@@ -2194,7 +2197,7 @@ Input:
         JP      NZ,L0866
         CALL    L0D50
         RST     SyntaxCheck
-        DB	3bh
+        DB	';'
         PUSH    HL
         CALL    L0D96
         POP     HL
@@ -2324,7 +2327,7 @@ L0920:  CALL    NZ,GetVar
         CALL    FLoadFromMem
         EX      (SP),HL
         PUSH    HL
-        CALL    L1073
+        CALL    FAddFromMem
         POP     HL
         CALL    FCopyToMem
         POP     HL
@@ -2454,10 +2457,10 @@ L09E6:  LD      (0219H),A
         SUB     0AEH
         JP      NC,L0A40
 L0A16:  RST     SyntaxCheck
-        DB	28H
+        DB	'('
 	CALL	EvalExpression
         RST     SyntaxCheck
-L0A1C:  DB	29h
+L0A1C:  DB	')'
         RET     
 
 L0A1E:  LD      D,7DH
@@ -2488,11 +2491,11 @@ L0A40:  LD      B,00H
         CP      29H
         JP      C,L0A65
         RST     SyntaxCheck
-	DB	28h
+	DB	'('
 	CALL	EvalExpression
 
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    096Ah
         EX      DE,HL
         LD      HL,(FACCUM)
@@ -2545,11 +2548,13 @@ FAnd:
         LD      A,B
         AND     D
         JP      (HL)
+
 L0A99:  OR      E
         LD      C,A
         LD      A,B
         OR      D
         JP      (HL)
+
 L0A9E:  LD      HL,0AB0H
         LD      A,(0219H)
         RRA     
@@ -2560,8 +2565,8 @@ L0A9E:  LD      HL,0AB0H
         LD      A,B
         CP      D
         RET     NC
-
         JP      L09D2
+
         OR      D
         LD      A,(BC)
         LD      A,C
@@ -2745,7 +2750,7 @@ L0BA5:  PUSH    DE
         CP      2CH
         JP      Z,L0BA5
         RST     SyntaxCheck
-        DB	29h
+        DB	')'
         LD      (PROG_PTR_TEMP2),HL
         POP     HL
         LD      (0218H),HL
@@ -2778,6 +2783,7 @@ L0BD8:  INC     HL
         JP      Z,L0C52
 L0BEE:  LD      E,ERR_BS
         JP      Error
+	
 L0BF3:  LD      DE,0004H
         LD      (HL),C
         INC     HL
@@ -2910,13 +2916,13 @@ Def:
         PUSH    DE
         CALL    L0D02
         RST     SyntaxCheck
-	DB	28h
+	DB	'('
 	CALL	GetVar
         CALL    L0969
         RST     SyntaxCheck
-        DB	29h
+        DB	')'
         RST     SyntaxCheck
-        DB	0ach
+        DB	TK_EQ
         LD      B,H
         LD      C,L
         EX      (SP),HL
@@ -2972,7 +2978,7 @@ L0D02:  PUSH    HL
         LD      E,ERR_ID
         JP      Error
 L0D10:  RST     SyntaxCheck
-        DB	0a0h
+        DB	TK_FN
         LD      A,80H
         LD      (NO_ARRAY),A
         OR      (HL)
@@ -3206,6 +3212,7 @@ L0E52:  POP     DE
         LD      H,B
         DEC     HL
         JP      L0DD5
+	
 L0E77:  PUSH    BC
         PUSH    HL
         LD      HL,(FACCUM)
@@ -3234,6 +3241,7 @@ L0E77:  PUSH    BC
         EX      (SP),HL
         PUSH    HL
         JP      L0D75
+	
 L0EAE:  POP     HL
         EX      (SP),HL
         RST     PushNextWord
@@ -3249,6 +3257,7 @@ L0EB5:  DEC     L
         INC     BC
         INC     DE
         JP      L0EB5
+	
 L0EBE:  CALL    096Ah
 L0EC1:  LD      HL,(FACCUM)
 L0EC4:  EX      DE,HL
@@ -3361,13 +3370,13 @@ Mid:
         CALL    L0FA2
         PUSH    BC
         LD      E,0FFH
-        CP      29H
+        CP      ')'
         JP      Z,L0F60
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    L0FB9
 L0F60:  RST     SyntaxCheck
-        DB	29h
+        DB	')'
         POP     AF
         EX      (SP),HL
         LD      BC,0F1AH
@@ -3407,7 +3416,7 @@ Out:
         RST     NextChar
         JP      Z,L0F96
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    L0FB9
 L0F96:  POP     BC
 L0F97:  IN      A,(00H)
@@ -3418,7 +3427,7 @@ L0F97:  IN      A,(00H)
 
 L0F9F:  EX      DE,HL
         RST     SyntaxCheck
-        DB	29h
+        DB	')'
 L0FA2:  POP     BC
         POP     DE
         PUSH    BC
@@ -3432,7 +3441,7 @@ L0FAC:  CALL    L0FB9
         LD      (0F98H),A
         LD      (0F84H),A
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         DB	06h	;LD      B,..
 L0FB8:	RST	NextChar
 L0FB9:  CALL    L0966
@@ -3547,25 +3556,127 @@ L1051:  LD      (VAR_BASE),HL
         CALL    L0642
 L1067:  PUSH    DE
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    L0FB9
         POP     DE
         LD      (DE),A
         RET     
 
-L1070:  LD      HL,1539H
-L1073:  CALL    FLoadBCDEfromMem
-        JP      L1082
-	
-L1079:  CALL    FLoadBCDEfromMem
+;=================================================================================
+;The Math Package
+;The 'math package' is a reasonably discrete block of code that provides floating-point arithmetic capability for the rest of BASIC. It also includes some math functions, such as SQR (square root) and is probably the hardest part of BASIC to understand. There are three general reasons for this :
+;
+;You may have forgotten a lot of the maths you learnt at school. This certainly applied to me : when I began working on this section from first principles, I quickly found myself floundering at the very idea of binary fractions.
+;Unless you're a numerical analyst who has reason to distrust conventional hardware/software floating-point support, you probably never needed to think about how floating point worked before now. Modern processors, compilers, and runtime libraries took the pain away years ago, and quite right too.
+;Floating point is hard to code. Consider this : Bill Gates is one of the brightest kids in America at the time, but he and his equally brainy pal Paul Allen end up having to hire a third wunderkind, Monte Davidoff, just to do floating point. They needed a specialist to do specialist work, and Monte had done it before.
+;Maths Refresher
+;The Basics of Bases
+;Consider an everyday decimal number such as 317.25. The digits that make up this and every other decimal number represent multiples of powers of ten, all added together:
+;
+;102	101	100	.	10-1	10-2
+;3	1	7	.	2	5
+;So writing 317.25 is basically just shorthand for 3*102 + 1*101 + 7*100 + 2*10-1 + 5*10-2. The shorthand form is far more readable, and that's why everybody uses it. At risk of labouring the point, the below table should clarify this.
+;
+;Digit Position	Digit Value for Position	Decimal Number	Digit value for this number
+;2	100	317.25	3 * 100	=	300
+;1	10	317.25	1 * 10	=	10
+;0	1	317.25	7 * 1	=	7
+;-1	1/10	317.25	2 * .1	=	.2
+;-2	1/100	317.25	5 * .01	=	.05
+;Total:	=	317.25
+;Now consider the same number in binary (base two). The decimal number 317.25, expressed in binary, is :
+;
+;28	27	26	25	24	23	22	21	20	.	2-1	2-2
+;1	0	0	1	1	1	1	0	1	.	0	1
+;And here's a table like the decimal one above, which should make it completely clear (remember 'bit' is short for 'binary digit') :
+;
+;Bit Position	Bit Value for Position	Binary Number	Bit value for this number
+;8	256	100111101.01	1 * 256	=	256
+;7	128	100111101.01	0 * 128	=	0
+;6	64	100111101.01	0 * 64	=	0
+;5	32	100111101.01	1 * 32	=	32
+;4	16	100111101.01	1 * 16	=	16
+;3	8	100111101.01	1 * 8	=	8
+;2	4	100111101.01	1 * 4	=	4
+;1	2	100111101.01	0 * 2	=	0
+;0	1	100111101.01	1 * 1	=	1
+;-1	1/2	100111101.01	0 * 1/2	=	0
+;-2	1/4	100111101.01	1 * 1/4	=	0.25
+;Total:	=	317.25
+;Mantissas, Exponents, and Scientific Notation
+;Now let's think about decimal numbers again. Another way of representing the number 317.25 is like this : 3.1725 * 102. Yes we've split one number into two numbers - we've extracted the number's magnitude and written it seperately. Why is this useful? Well, consider a very small number such as 0.00000000000588. Looking at it now, precisely how small is that? That's a lot of zeros to work through. Also, let's pretend we're using very small numbers like this one in a pen+paper calculation - something like 0.00000000000588 + 0.000000000000291. You'd better be sure you don't miss out a zero when you're working the problem through, or your answer will be off by a factor of 10. It's much easier to have those numbers represented as 5.88 * 10-12 and 2.91* 10-13 (yes the second number had an extra zero - did you spot that?). The same principle applies for very large numbers like 100000000 - it's just easier and less human error prone to keep the magnitudes seperated out when working with such numbers.
+;
+;It's the smallest of small steps to get from this form of number notation to proper scientific notation. The only difference is how the magnitude is written - in scientific notation we lose the magnitude's base and only write it's exponent part, thusly : 3.1725 E 2. The part that's left of the E, the 3.1725, is called the mantissa. The bit to the right of the E is the exponent.
+;
+;Mantissas and Exponents in Binary
+;Let's go back to considering 317.25 in binary : 100111101.01. Using scientific notation, this is 1.0011110101 E 1000. Remember that both mantissa and exponent are written in binary that exponent value 1000 is a binary number, 8 in decimal.
+;
+;Why floating point?
+;Consider the eternal problem of having a finite amount of computer memory. Not having infinate RAM means we cannot represent an infinite range of numbers. If we have eight bits of memory, we can represent the integers from 0 to 255 only. If we have sixteen, we can raise our range from 0 to 65535, and so on. The more bits we can play with, the larger the range of numbers we can represent. With fractional numbers there is a second problem : precision. Many fractions recur : eg one third in decimal is 0.33333 recurring. Likewise, one tenth is 0.1 in decimal but 0.0001100110011 last four bits recurring in binary.
+;
+;So any method we choose for storing fractional numbers has to take these two problems into consideration. Bearing this in mind, consider the two possible approaches for storing fractional numbers :
+;
+;Fixed point. Store the integer part in one field, and the fractional part in another field. It's called fixed point representation since the point (binary or decimal) is always in the same place - between the integer and fractional fields.
+;Floating point. Store the mantissa in one field, and the exponent in another field. This way, the point wouldn't be fixed into place - it could be anywhere, as determined by the binary exponent. It would, in fact be, a floating point.
+;Why is floating point better than fixed point? Let's say we have 32 bits to play with. Let's use fixed point and assign 16 bits for the integer part and 16 for the fractional part. This allows a range of 0 to 65535.9999 or so, which isn't very good value, range-wise, for 32 bits. OK, lets increase the range - we'll change to using 20 bits for the integer and 12 for the fraction. This gives us a range of 0 to 1,048,575.999ish . Still not a huge range, and since we've only got 12 bits for the fraction we're losing precision - numbers stored this way will be rounded to the nearest 1/4096th.
+;
+;Now lets try floating point instead. Lets assign a whopping 24 bits for the mantissa and 8 bits for the exponent. 8 bits doesn't sound like much, but this is an exponent after all - with these 8 bits we get a range of -128 to +127 which is roughly 10-38 to to 1038. That's a nice big range! And we get 24 bits of precision too! It's clearly the better choice.
+;
+;Floating point is not a perfect solution though... adding a very small number to a very large number is likely to produce an erroneous result. For example, go to the BASIC emulator and try PRINT 10000+.1. You get 10000.1 as expected. Now try PRINT 10000+.01 or PRINT 100000+.1. See?
+;
+;Normalisation
+;Normalisation is the process of shifting the mantissa until it is between 0.5 and 1 and adjusting the exponent to compensate. For example, these binary numbers are unnormalised :
+;
+;101.001
+;0.0001
+;0.011 E 101
+;After normalisation these same binary numbers become :
+;
+;0.101001 E 11
+;0.1 E -11
+;0.11 E 100
+;blah
+;
+;How Altair BASIC stored floating point numbers
+;There was no industry standard for floating-point number representation back in 1975, so Monte had to roll his own. He decided that 32 bits would allow an adequate range, and defined his floating-point number format like this :
+;
+;Floating-point number representation in Altair BASIC
+;
+;The 8-bit exponent field had a bias of 128. This just meant that the stored exponent was stored as 'exponent+128'.
+;
+;Also, the mantissa was really 24 bits long, but squeezed into 23 bits. How did he save an extra bit of precision? By considering zero as a special case, indicated by exponent zero. Any non-zero number will always have a mantissa with a leading 1. And since the first bit is always going to be 1, why bother storing it?
+;
+;The intermediate storage of unpacked fp numbers is undefined and seems to be generally done on the fly.
+;
+;fixme: put example of normalising and denormalising.
+;
+;
+;============================================================================
+
+
+;FAddOneHalf
+;Adds 0.5 to FACCUM.
+
+FAddOneHalf:
+	LD      HL,ONE_HALF
+FAddFromMem:
+	CALL    FLoadBCDEfromMem
+        JP      FAddBCDE
+
+FSubFromMem:
+	CALL    FLoadBCDEfromMem
         DB	21h			;LD      HL,...
 	
 	ORG	107dh
+;2.2 Addition & Subtraction
+;blah
 FSub:
 	POP	BC
 	POP	DE
-L107F:  CALL    FNegate
-L1082:  LD      A,B
+FSubBCDE:
+	CALL    FNegate
+FAddBCDE:
+	LD      A,B
         OR      A
         RET     Z
 
@@ -3586,22 +3697,24 @@ L109C:  CP      19H
         RET     NC
 
         PUSH    AF
-        CALL    L1327
+        CALL    FUnpackMantissas
         LD      H,A
         POP     AF
-        CALL    L1149
+        CALL    FMantissaRtMult
         OR      H
         LD      HL,FACCUM
-        JP      P,L10C2
-        CALL    L1129
-        JP      NC,L1108
+        JP      P,FSubMantissas
+        CALL    FAddMantissas
+        JP      NC,FRoundUp
         INC     HL
         INC     (HL)
-        JP      Z,L1124
+        JP      Z,Overflow
         LD      L,01H
         CALL    L115F
-        JP      L1108
-L10C2:  XOR     A
+        JP      FRoundUp
+	
+FSubMantissas:
+	XOR     A
         SUB     B
         LD      B,A
         LD      A,(HL)
@@ -3615,7 +3728,19 @@ L10C2:  XOR     A
         LD      A,(HL)
         SBC     A,C
         LD      C,A
-L10D0:  CALL    C,L1135
+
+;2.3 Mantissa Magic
+;A group of functions for manipulating mantissas.
+;
+; 
+;
+;FNormalise
+;Result mantissa in CDEB is normalised, rounded up to CDE, and stored in FACCUM.
+;
+;If carry set then negate the mantissa. Most users of this function call over this step.	
+
+FNormalise:
+	CALL    C,FNegateInt
 L10D3:  LD      L,B
         LD      H,E
         XOR     A
@@ -3648,17 +3773,20 @@ L10F5:  JP      P,L10ED
         LD      E,H
         LD      B,L
         OR      A
-        JP      Z,L1108
+        JP      Z,FRoundUp
         LD      HL,FACCUM+3
         ADD     A,(HL)
         LD      (HL),A
         JP      NC,FZero
         RET     Z
 
-L1108:  LD      A,B
+;Round up the extra mantissa byte.
+
+FRoundUp:
+	LD      A,B
 L1109:  LD      HL,FACCUM+3
         OR      A
-        CALL    M,L111A
+        CALL    M,FMantissaInc
         LD      B,(HL)
         INC     HL
         LD      A,(HL)
@@ -3666,7 +3794,11 @@ L1109:  LD      HL,FACCUM+3
         XOR     C
         LD      C,A
         JP      FLoadFromBCDE
-L111A:  INC     E
+
+;FMantissaInc
+;Increments the mantissa in CDE and handles overflow.
+FMantissaInc:
+	INC     E
         RET     NZ
 
         INC     D
@@ -3679,9 +3811,15 @@ L111A:  INC     E
         INC     (HL)
         RET     NZ
 
-L1124:  LD      E,ERR_OV
+Overflow:
+	LD      E,ERR_OV
         JP      Error
-L1129:  LD      A,(HL)
+
+;FAddMantissas
+;Adds the mantissa pointed to by HL to the one in CDE.
+
+FAddMantissas:
+	LD      A,(HL)
         ADD     A,E
         LD      E,A
         INC     HL
@@ -3694,7 +3832,11 @@ L1129:  LD      A,(HL)
         LD      C,A
         RET     
 
-L1135:  LD      HL,0251H
+;FNegateInt
+;Negate the 32-bit integer in CDEB by subtracting it from zero. Also flips the sign in FTEMP. Used by FAsInteger and FAdd.
+
+FNegateInt:
+	LD      HL,FTEMP
         LD      A,(HL)
         CPL     
         LD      (HL),A
@@ -3713,7 +3855,11 @@ L1135:  LD      HL,0251H
         LD      C,A
         RET     
 
-L1149:  LD      B,00H
+;FMantissaRtMult
+;Shifts the mantissa in CDE right by A places. Note that lost bits end up in B, general practice so we can round up from something later should we need to.
+
+FMantissaRtMult:
+	LD      B,00H			;Initialise extra mantissa byte
 L114B:  SUB     08H
         JP      C,L1158
         LD      B,E
@@ -3723,7 +3869,8 @@ L114B:  SUB     08H
         JP      L114B
 L1158:  ADD     A,09H
         LD      L,A
-L115B:  XOR     A
+RtMultLoop:
+	XOR     A
         DEC     L
         RET     Z
 
@@ -3739,7 +3886,8 @@ L115F:  RRA
         LD      A,B
         RRA     
         LD      B,A
-        JP      L115B
+        JP      RtMultLoop
+	
         NOP     
         NOP     
         NOP     
@@ -3767,24 +3915,55 @@ L117E:  RST     FTestSign
         LD      (HL),B
         PUSH    DE
         PUSH    BC
-        CALL    L1082
+        CALL    FAddBCDE
         POP     BC
         POP     DE
         INC     B
         CALL    L121A
         LD      HL,116DH
-        CALL    L1079
+        CALL    FSubFromMem
         LD      HL,1171H
         CALL    L15FA
         LD      BC,8080H
         LD      DE,0000H
-        CALL    L1082
+        CALL    FAddBCDE
         POP     AF
-        CALL    L1446
+        CALL    AddDigit
 L11B3:  LD      BC,8031H
         LD      DE,7218H
         DB	21h		;LD      HL,...
-	
+
+;2.4 Multiplication & Division
+;blah
+;
+; 
+;
+;FMul
+;Multiplying two floating point numbers is theoretically simple. All we have to do is add the exponents, multiply the mantissas, and normalise the result. The only problem is that the 8080 didn't have a MUL instruction. Therefore the fundamental logic of multiplication (shift and add) is done by hand in this function. FMul's logic read something like this :
+;
+;Get lhs and rhs. Exit if rhs=0.
+;Add lhs and rhs exponents
+;Initialise result mantissa to 0.
+;Get rightmost bit of rhs.
+;If this bit is set then add the lhs mantissa to the result mantissa.
+;Shift result mantissa right one bit.
+;Get next bit of rhs mantissa. If not done all 24 bits, loop back to 5.
+;Jump to FNormalise
+;Alternatively, here's some C++ pseudo-code :
+;
+;float FMul(float lhs, float rhs)
+;{
+;  float result = 0;
+;  for (int bit=0 ; bit<24 ; bit++) {
+;    if (lhs.mantissa & (2^bit)) {
+;      result.mantissa += rhs.mantissa;
+;    }
+;    result.mantissa>>=1;
+;  }
+;  return FNormalise(result);
+;}
+;
+;(fixme: Show why this works)
 	ORG	11BAh
 FMul:
 	POP	BC
@@ -3793,7 +3972,7 @@ L11BC:  RST     FTestSign
         RET     Z
 
         LD      L,00H
-        CALL    L128A
+        CALL    FExponentAdd
         LD      A,C
         LD      (11F3H),A
         EX      DE,HL
@@ -3803,26 +3982,28 @@ L11BC:  RST     FTestSign
         LD      E,B
         LD      HL,L10D3
         PUSH    HL
-        LD      HL,11DCH
+        LD      HL,FMulOuterLoop
         PUSH    HL
         PUSH    HL
         LD      HL,FACCUM
-        LD      A,(HL)
+FMulOuterLoop:
+	LD      A,(HL)
         INC     HL
         OR      A
         JP      Z,L1207
         PUSH    HL
         EX      DE,HL
         LD      E,08H
-L11E6:  RRA     
+FMulInnerLoop:
+	RRA     
         LD      D,A
         LD      A,C
         JP      NC,L11F4
         PUSH    DE
-        LD      DE,0000H
+        LD      DE,0000H	; <-- самомодифицирующийся код
         ADD     HL,DE
         POP     DE
-        ADC     A,00H
+        ADC     A,00H		; <-- самомодифицирующийся код
 L11F4:  RRA     
         LD      C,A
         LD      A,H
@@ -3836,9 +4017,11 @@ L11F4:  RRA
         LD      B,A
         DEC     E
         LD      A,D
-        JP      NZ,L11E6
+        JP      NZ,FMulInnerLoop
         EX      DE,HL
-L1205:  POP     HL
+	
+PopHLandReturn:
+	POP     HL
         RET     
 
 L1207:  LD      B,E
@@ -3847,7 +4030,10 @@ L1207:  LD      B,E
         LD      C,A
         RET     
 
-L120C:  CALL    FPush
+;FDivByTen
+;Divides FACCUM by 10. Used in FOut to bring the number into range before printing.
+FDivByTen:
+	CALL    FPush
         LD      BC,8420H
         LD      DE,0000H
         CALL    FLoadFromBCDE
@@ -3859,7 +4045,7 @@ L1218:  POP     BC
 L121A:  RST     FTestSign
         JP      Z,DivideByZero
         LD      L,0FFH
-        CALL    L128A
+        CALL    FExponentAdd
         INC     (HL)
         INC     (HL)
         DEC     HL
@@ -3878,7 +4064,8 @@ L121A:  RST     FTestSign
         LD      D,A
         LD      E,A
         LD      (124CH),A
-L123D:  PUSH    HL
+FDivLoop:
+	PUSH    HL
         PUSH    BC
         LD      A,L
         SUB     00H
@@ -3897,7 +4084,9 @@ L123D:  PUSH    HL
         POP     AF
         POP     AF
         SCF     
-        JP      NC,0E1C1h
+        DB	0D2H	;JP      NC,...
+	POP	BC
+	POP	HL
         LD      A,C
         INC     A
         DEC     A
@@ -3923,14 +4112,19 @@ L123D:  PUSH    HL
         LD      A,C
         OR      D
         OR      E
-        JP      NZ,L123D
+        JP      NZ,FDivLoop
         PUSH    HL
         LD      HL,FACCUM+3
         DEC     (HL)
         POP     HL
-        JP      NZ,L123D
-        JP      L1124
-L128A:  LD      A,B
+        JP      NZ,FDivLoop
+        JP      Overflow
+;FExponentAdd
+;Here is code common to FMul and FDiv and is called by both of them. It's main job is to add (for FMul) or subtract (for FDiv) the binary exponents of the lhs and rhs arguments, for which on entry L=0 for addition or L=FF respectively.
+;
+;If BCDE is 0, then we don't need to do anything and can jump to the function exit.	
+FExponentAdd:
+	LD      A,B
         OR      A
         JP      Z,L12AC
         LD      A,L
@@ -3944,8 +4138,8 @@ L128A:  LD      A,B
         JP      P,L12AB
         ADD     A,80H
         LD      (HL),A
-        JP      Z,L1205
-        CALL    L1327
+        JP      Z,PopHLandReturn
+        CALL    FUnpackMantissas
         LD      (HL),A
         DEC     HL
         RET     
@@ -3956,8 +4150,11 @@ L12A8:  RST     FTestSign
 L12AB:  OR      A
 L12AC:  POP     HL
         JP      P,FZero
-        JP      L1124
-	
+        JP      Overflow
+
+;Multiplies FACCUM by 10. Seems to be here for speed reasons, since this could be done very simply with a call to FMul.
+;
+;Copy FACCUM to BCDE and return if it's 0.
 FMulByTen:
 	CALL    FCopyToBCDE
         LD      A,B
@@ -3965,15 +4162,16 @@ FMulByTen:
         RET     Z
 
         ADD     A,02H
-        JP      C,L1124
+        JP      C,Overflow
         LD      B,A
-        CALL    L1082
+        CALL    FAddBCDE
         LD      HL,FACCUM+3
         INC     (HL)
         RET     NZ
 
-        JP      L1124
+        JP      Overflow
 
+;2.5 Sign Magic
 
 ;A group of functions for testing and changing the sign of an fp number.
 
@@ -3982,12 +4180,21 @@ FMulByTen:
 	ORG	12cah
 
 FTestSign_tail:
-	LD	A,(024FH)
-	CP	2FH
+	LD	A,(FACCUM+2)
+	DB	0FEH	;CP	2FH
+
+;InvSignToInt
+;Inverts the sign byte in A before falling into SigntoInt.
+;
+;Simply invert A.
+InvSignToInt:
+	CPL
 
 ;SignToInt
 ;Converts the sign byte in A to 0x01 for positive, 0xFF for negative.
 
+
+;Get bit 7 into carry flag and subtract from itself with carry. If A was +ve then it is now 0, whereas if A was -ve then A is now FF.
         RLA     
 L12D0:  SBC     A,A
         RET     NZ
@@ -4016,7 +4223,7 @@ L12DA:  LD      HL,FACCUM+3
         INC     HL
         LD      (HL),80H
         RLA     
-        JP      L10D0
+        JP      FNormalise
 
 ;Abs
 ;FACCUM = |FACCUM|.
@@ -4095,7 +4302,26 @@ FCopyLoop:
         JP      NZ,FCopyLoop
         RET     
 
-L1327:  LD      HL,024FH
+;2.7 Unpacking & Comparison
+;Two functions : the first is for unpacking the mantissas of two floating-point numbers, the second is for comparing two floating-point numbers.
+;
+; 
+;FUnpackMantissas
+;Unpacks the mantissas of FACCUM and BCDE. This is simple enough - we just restore the missing most-significant bit, invariably a 1 (see tech note). Unfortunately, doing this loses the sign bits of both packed numbers.
+;
+;To compensate for this, a combination of both signs is returned. Duing the function FACC's sign is negated and later xor'ed with BCDE's sign, and returned in bit 7 of A. The effect of this is when the function returns, A is +ve if the signs mismatched, or -ve if the signs matched.
+;
+;FACC	Negated
+;FACC	BCDE	Result
+;after XOR
+;+	-	+	-
+;+	-	-	+
+;-	+	+	+
+;-	+	-	-
+
+
+FUnpackMantissas:
+	LD      HL,FACCUM+2
         LD      A,(HL)
         RLCA    
         SCF     
@@ -4115,27 +4341,37 @@ L1327:  LD      HL,024FH
         XOR     (HL)
         RET     
 
+;FCompare
+;Compares FACCUM to BCDE, with the result being returned in A as follows :
+
+;FACCUM > BCDE, A = 0x01.
+;FACCUM < BCDE, A = 0xFF.
+;FACCUM = BCDE, A = 0.
+
+;If BCDE is zero, then we don't need to compare and can just return via FTestSign.
 FCompare:
 	LD      A,B
         OR      A
         JP      Z, FTestSign
-        LD      HL,12CEH
+        LD      HL,InvSignToInt
         PUSH    HL
         RST     FTestSign
         LD      A,C
         RET     Z
 
-        LD      HL,024FH
+        LD      HL,FACCUM+2
         XOR     (HL)
         LD      A,C
         RET     M
 
-        CALL    L1354
+        CALL    FIsEqual
         RRA     
         XOR     C
         RET     
 
-L1354:  INC     HL
+;Test for equality between BCDE and FACCUM.
+FIsEqual:
+	INC     HL
         LD      A,B
         CP      (HL)
         RET     NZ
@@ -4159,6 +4395,14 @@ L1354:  INC     HL
         POP     HL
         RET     
 
+;2.8 Converting to Integer
+;blah
+;
+; 
+;FAsInteger
+;Returns the integer part of FACCUM in CDE.
+;
+;Return with BCDE=0 if A=0.
 FAsInteger:
 	LD      B,A
         LD      C,A
@@ -4169,22 +4413,24 @@ FAsInteger:
 
         PUSH    HL
         CALL    FCopyToBCDE
-        CALL    L1327
+        CALL    FUnpackMantissas
         XOR     (HL)
         LD      H,A
-        CALL    M,L138B
+        CALL    M,FMantissaDec
         LD      A,98H
         SUB     B
-        CALL    L1149
+        CALL    FMantissaRtMult
         LD      A,H
         RLA     
-        CALL    C,L111A
+        CALL    C,FMantissaInc
         LD      B,00H
-        CALL    C,L1135
+        CALL    C,FNegateInt
         POP     HL
         RET     
 
-L138B:  DEC     DE
+
+FMantissaDec:
+	DEC     DE
         LD      A,D
         AND     E
         INC     A
@@ -4200,7 +4446,7 @@ L138B:  DEC     DE
 
 	ORG	1392h
 Int:
-L1392:  LD      HL,FACCUM+3
+	LD      HL,FACCUM+3
         LD      A,(HL)
         CP      98H
         LD      A,(FACCUM)
@@ -4213,7 +4459,7 @@ L1392:  LD      HL,FACCUM+3
         PUSH    AF
         LD      A,C
         RLA     
-        CALL    L10D0
+        CALL    FNormalise
         POP     AF
         RET     
 
@@ -4271,16 +4517,16 @@ SkipSign:
 FInLoop:
 	RST     NextChar
         JP      C,ProcessDigit
-        CP      2EH		; '.'
+        CP      '.'		; '.'
         JP      Z,PointFound
-        CP      45H		; 'E'
+        CP      'E'		; 'E'
         JP      NZ,ScaleResult
         RST     NextChar
         PUSH    HL
         LD      HL,NextExponentDigit
         EX      (SP),HL
         DEC     D
-        CP      0A5H		; '-'
+        CP      TK_MINUS		; '-'
         RET     Z		; JP NextExponentDigit
 
         CP      '-'		; '-'
@@ -4290,7 +4536,7 @@ FInLoop:
         CP      '+'		; '+'
         RET     Z		; JP NextExponentDigit
 
-        CP      0A4H		; '+'
+        CP      TK_PLUS		; '+'
         RET     Z		; JP NextExponentDigit
 
         POP     AF
@@ -4315,7 +4561,7 @@ DecimalLoop:
 	CALL    P,DecimalShiftUp
         JP      P,DecimalLoopEnd
         PUSH    AF
-        CALL    L120C
+        CALL    FDivByTen
         POP     AF
         INC     A
 DecimalLoopEnd:
@@ -4348,20 +4594,21 @@ ProcessDigit:
         CALL    FMulByTen
         POP     AF
         SUB     '0'
-        CALL    L1446
+        CALL    AddDigit
         POP     HL
         POP     BC
         POP     DE
         JP      FInLoop
 	
-L1446:  CALL    FPush
+AddDigit:
+	CALL    FPush
         CALL    FCharToFloat
 	
 	ORG	144ch
 FAdd:
         POP     BC
         POP     DE
-        JP      L1082
+        JP      FAddBCDE
 	
 DoExponentDigit:
 	LD      A,E
@@ -4417,7 +4664,7 @@ L147C:  INC     HL
         CALL    M,FNegate
         XOR     A
         PUSH    AF
-        CALL    L152B
+        CALL    ToUnder1000000
 L148B:  LD      BC,9143H
         LD      DE,4FF8H
         CALL    FCompare
@@ -4426,12 +4673,12 @@ L148B:  LD      BC,9143H
         CALL    L1428
         PUSH    AF
         JP      L148B
-L149F:  CALL    L120C
+L149F:  CALL    FDivByTen
         POP     AF
         INC     A
         PUSH    AF
-        CALL    L152B
-L14A8:  CALL    L1070
+        CALL    ToUnder1000000
+L14A8:  CALL    FAddOneHalf
         INC     A
         CALL    FAsInteger
         CALL    FLoadFromBCDE
@@ -4447,7 +4694,7 @@ L14A8:  CALL    L1070
 L14C3:  DEC     A
         POP     HL
         PUSH    AF
-        LD      DE,153DH
+        LD      DE,DECIMAL_POWERS
 L14C9:  DEC     B
         LD      (HL),2EH
         CALL    Z,L1317
@@ -4472,7 +4719,7 @@ L14D8:  INC     B
         DEC     HL
         DEC     HL
         JP      NC,L14D8
-        CALL    L1129
+        CALL    FAddMantissas
         INC     HL
         CALL    FLoadFromBCDE
         EX      DE,HL
@@ -4513,31 +4760,32 @@ L1528:  LD      (HL),C
         POP     HL
         RET     
 
-L152B:  LD      BC,9474H
+;ToUnder1,000,000
+;Divides FACCUM by ten until it's less than 1,000,000. This function is semi-recursive... if it needs to recurse (ie
+
+ToUnder1000000:
+	LD      BC,9474H
         LD      DE,23F7H
         CALL    FCompare
         POP     HL
         JP      PO,L149F
         JP      (HL)
-        NOP     
-        NOP     
-        NOP     
-        ADD     A,B
-        AND     B
-        ADD     A,(HL)
-        LD      BC,2710H
-        NOP     
-        RET     PE
 
-        INC     BC
-        NOP     
-        LD      H,H
-        NOP     
-        NOP     
-        LD      A,(BC)
-        NOP     
-        NOP     
-        LD      BC,0000H
+ONE_HALF:
+        DB 0,0,0,80h		;Constant value 0.5, used by FRoundUp
+
+;DECIMAL_POWERS
+;Table of powers of ten.
+
+DECIMAL_POWERS:
+	DB	0A0h, 86h, 01h		;DD 100000
+	DB	010h, 27h, 00h        	;DD 10000
+	DB	0E8h, 03h, 00h        	;DD 1000
+	DB	064h, 00h, 00h        	;DD 100
+	DB	00Ah, 00h, 00h        	;DD 10
+	DB	001h, 00h, 00h        	;DD 1
+	
+	
 L154F:  LD      HL,FNegate
         EX      (SP),HL
         JP      (HL)
@@ -4565,7 +4813,7 @@ FPower:
         JP      P,L1581
         PUSH    DE
         PUSH    BC
-        CALL    L1392
+        CALL    Int
         POP     BC
         POP     DE
         PUSH    AF
@@ -4574,7 +4822,7 @@ FPower:
         LD      A,H
         RRA     
 L1581:  POP     HL
-        LD      (024FH),HL
+        LD      (FACCUM+2),HL
         POP     HL
         LD      (FACCUM),HL
         CALL    C,L154F
@@ -4595,19 +4843,19 @@ L1599:  CALL    FPush
         LD      A,(FACCUM+3)
         CP      88H
         JP      NC,L12A8
-        CALL    L1392
+        CALL    Int
         ADD     A,80H
         ADD     A,02H
         JP      C,L12A8
         PUSH    AF
         LD      HL,116DH
-        CALL    L1073
+        CALL    FAddFromMem
         CALL    L11B3
         POP     AF
         POP     BC
         POP     DE
         PUSH    AF
-        CALL    L107F
+        CALL    FSubBCDE
         CALL    FNegate
         LD      HL,15D9H
         CALL    L1609
@@ -4671,7 +4919,7 @@ L1612:	POP	AF
         POP     HL
         CALL    FLoadBCDEfromMem
         PUSH    HL
-        CALL    L1082
+        CALL    FAddBCDE
         POP     HL
         JP      L1612
 
@@ -4688,7 +4936,7 @@ Rnd:
         CALL    L11BC
         LD      BC,6828H
         LD      DE,0B146H
-        CALL    L1082
+        CALL    FAddBCDE
 L1647:  CALL    FCopyToBCDE
         LD      A,E
         LD      E,C
@@ -4710,7 +4958,7 @@ RND_SEED:
 	ORG	1660H
 Cos:
 L1660:  LD      HL,16A6H
-        CALL    L1073
+        CALL    FAddFromMem
 	ORG	1666h
 Sin:
 L1666:  CALL    FPush
@@ -4721,22 +4969,22 @@ L1666:  CALL    FPush
         POP     DE
         CALL    L121A
         CALL    FPush
-        CALL    L1392
+        CALL    Int
         POP     BC
         POP     DE
-        CALL    L107F
+        CALL    FSubBCDE
         LD      HL,16AAH
-        CALL    L1079
+        CALL    FSubFromMem
         RST     FTestSign
         SCF     
         JP      P,L1692
-        CALL    L1070
+        CALL    FAddOneHalf
         RST     FTestSign
         OR      A
 L1692:  PUSH    AF
         CALL    P,FNegate
         LD      HL,16AAH
-        CALL    L1073
+        CALL    FAddFromMem
         POP     AF
         CALL    NC,FNegate
         LD      HL,16AEH
@@ -4791,7 +5039,7 @@ Atn:
         LD      D,C
         LD      E,C
         CALL    L121A
-        LD      HL,L1079
+        LD      HL,FSubFromMem
         PUSH    HL
 L16F3:  LD      HL,16FDH
         CALL    L15FA
@@ -4881,7 +5129,7 @@ Cur:
 L176A:  CALL    L0FB9
         LD      (1957H),A
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    L0FB9
         LD      (1958H),A
         CP      20H
@@ -4934,11 +5182,11 @@ Plot:
         CALL    L0FB9
         LD      (1954H),A
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    L0FB9
         LD      (1955H),A
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    L0FB9
         LD      (1956H),A
 L17DD:  LD      A,(1954H)
@@ -5011,7 +5259,7 @@ Line:
         CALL    L0FB9
         LD      (1952H),A
         RST     SyntaxCheck
-        DB	2ch
+        DB	','
         CALL    L0FB9
         LD      (1953H),A
         PUSH    HL
