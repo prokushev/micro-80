@@ -1,3 +1,12 @@
+asw -lU basic80.asm > basic80.lst
+p2bin basic80.p basic80.bin
+exit
+
+asw -lU mon580-306-vt52.asm > mon580-306-vt52.lst
+p2bin mon580-306-vt52.p mon580-306-vt52.bin
+
+exit
+
 asw -lU monitor.asm > monitor.lst
 p2bin monitor.p monitor.bin
 
@@ -21,8 +30,6 @@ p2bin ch-com.p ch-com.bin
 
 bin2rk cpm64-loader.bin 12544
 
-asw -lU basic80.asm > basic80.lst
-p2bin basic80.p basic80.bin
 bin2rk basic80.bin
 
 bin2rk ctrlbas.bin

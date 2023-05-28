@@ -37,7 +37,7 @@ LDA03:	JP			WBOOT
 		EX			DE,HL
 		ADD			HL,BC
 		LD			A,(HL)
-		LD			(SECTOR),A
+		LD			(SECT),A
 		LD			L,A
 		RET
 

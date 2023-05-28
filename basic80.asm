@@ -15,6 +15,7 @@
 ; !!GO TO=GOTO, GO SUB=GOSUB
 ; ??ГОСТ расширение основных средств уровень 1 и 2 не могут быть реализованы из-за усеченного знакогенератора. Нет строчных букв.
 ; !!Развернутые сообщения об ошибках
+; !!Отвязать по максимуму от работы в ОЗУ (версия для ROM-диска?)
 ;
 ; БЕЙСИК для МИКРО-80 - Общее устройство
 ;
@@ -200,12 +201,8 @@ END	EQU	0	; Поддержка команды END
 
 ; Начало (RST 0)
 
-; Запуск осуществляется с адреса 0. Проводится инициализация стека и
-; переход address 0000, the very start of the program. Not much needs to be done here - just 
-; disable interrupts and jump up to the Init section in upper memory. Notice that the
-; jump address here is coloured red, indicating the code is modified by code elsewhere.
-; In this case, the jump address is changed to point to Ready once Init has run successfully. (fixme: not yet it isnt).
-
+; Запуск интерпретатора осуществляется с адреса 0. Проводится инициализация стека и
+; переход на код инициализации.
 
 
 Start:
@@ -305,16 +302,17 @@ RST6RET:
 
 
 ; токены и прочие данные
-;1.2 Keywords
-;There are three groups of keywords :
+; 1.2 Keywords
 ;
-;General keywords. These typically start a statement; examples are LET, PRINT, GOTO and so on.
-;Supplementary keywords. Used in statements but not as part of an expression, eg TO, STEP, TAB
-;Inline keywords. Only used in expressions, eg, SIN, RND, INT.
+; There are three groups of keywords :
+;
+; General keywords. These typically start a statement; examples are LET, PRINT, GOTO and so on.
+; Supplementary keywords. Used in statements but not as part of an expression, eg TO, STEP, TAB
+; Inline keywords. Only used in expressions, eg, SIN, RND, INT.
 ; 
 ;
-;KW_INLINE_FNS
-;A table of function pointers for the inline keywords.
+; KW_INLINE_FNS
+; A table of function pointers for the inline keywords.
 ;
 
 KW_INLINE_FNS:
@@ -343,10 +341,11 @@ KW_INLINE_FNS:
 	DW	Right	;0F44
 	DW	Mid	;0F4E
 
-;KW_ARITH_OP_FNS
-;A table of function pointers for the arithmetic operator functions. 
-;Four entries of three bytes each; the first entry byte is for operator 
-;precedence and the second and third bytes are function pointers.
+; KW_ARITH_OP_FNS
+;
+; A table of function pointers for the arithmetic operator functions. 
+; Four entries of three bytes each; the first entry byte is for operator 
+; precedence and the second and third bytes are function pointers.
 
 KW_ARITH_OP_FNS:
 	DB	079h
@@ -365,14 +364,15 @@ KW_ARITH_OP_FNS:
 	DW	FOr	; OR 0A76
 
  
-;KEYWORDS
-;String constants for all keywords, including arithmetic operators. Note that the last character of each keyword has bit 7 
-;set to denote that it is the last character; also that the whole table is terminated with a single null byte.
+; KEYWORDS
+;
+; Строковые константы для всех ключевых слов, включая арифметические операторы. Последний символ определяется установкой в 1 старшего разряда.
+; Конец таблицы отмечается нулевым байтом.
 
-;General keywords
+; Основные ключевые слова
 
 	ORG	088h
-; LET и END выкинули зачем-то...
+; LET и END выкинули зачем-то... И этим поломали совместимость... В отчечественных бейсиках так много где произошло...
 
 KEYWORDS:
 Q	SET	80h
@@ -685,6 +685,7 @@ KW_GENERAL_FNS:
 	IF	END
 	DW	End
 	ENDIF
+
 ;1.3 Error Codes & Globals
 ;A table of two-character error codes for the 18 errors.
 
@@ -904,16 +905,16 @@ szStop:		DB		0Dh, 0Ah, 73h, 74h, 6Fh, 70h, 0A0h, 00h		; "СТОП "
 ;= 1.4 Utility Functions =
 ;=========================
 
-;Some useful functions.
-;GetFlowPtr
-;Sets HL to point to the appropriate flow struct on the stack. On entry, 
-;if this was called by the NEXT keyword handler then DE is pointing to 
-;the variable following the NEXT keyword.
+; Some useful functions.
+; GetFlowPtr
+; Sets HL to point to the appropriate flow struct on the stack. On entry, 
+; if this was called by the NEXT keyword handler then DE is pointing to 
+; the variable following the NEXT keyword.
 
 	ORG 027ah
 
 
-;The first four bytes on the stack are (or rather, should be) two return addresses.
+; The first four bytes on the stack are (or rather, should be) two return addresses.
 ; We're not interested in them, so the first thing to do is set HL to point to SP+4.
 
 GetFlowPtr:		
@@ -959,10 +960,11 @@ NoVar:  LD      BC,000DH		; Размер структуры FOR
         JP      GetFlowLoop
 		
 ;		
-;CopyMemoryUp
-;Copies a block of memory from BC to HL. Copying is done backwards, 
-;down to and including the point where BC==DE. It goes backwards 
-;because this function is used to move blocks of memory forward by
+; CopyMemoryUp
+;
+; Copies a block of memory from BC to HL. Copying is done backwards, 
+; down to and including the point where BC==DE. It goes backwards 
+; because this function is used to move blocks of memory forward by
 ; as little as a couple of bytes. If it copied forwards then the
 ; block of memory would overwrite itself.
 
@@ -984,7 +986,7 @@ CopyMemLoop:
         DEC     HL
         JP      CopyMemLoop
 		
-;CheckEnoughVarSpace2
+; CheckEnoughVarSpace2
 ; То же, что и ниже, но C берется из следующей ячейки, откуда вызвана подпрограмма. Более эффективно, чем в Altair Basic
 CheckEnoughVarSpace2:
 	EX      (SP),HL
@@ -1235,25 +1237,33 @@ New2:
 ;Resets everything.
 		
 ResetAll:
+;Set PROG_PTR_TEMP to just before the start of the program.
 	LD      HL,(PROGRAM_BASE)
         DEC     HL
 ClearAll:
 	LD      (PROG_PTR_TEMP),HL
         LD      HL,(021BH)
         LD      (022FH),HL
+;Reset the data pointer
         CALL    Restore
+;Reset variable pointers
         LD      HL,(VAR_BASE)
         LD      (VAR_ARRAY_BASE),HL
         LD      (VAR_TOP),HL
+;Get return address in BC and reset the stack pointer to it's top. 
 ResetStack:
 	POP     BC
         LD      HL,(STACK_TOP)
         LD      SP,HL
+
         LD      HL,021FH
         LD      (021DH),HL
+
         LD      HL,0000H
         PUSH    HL
+
         LD      (023FH),HL
+
         LD      HL,(PROG_PTR_TEMP)
         XOR     A
         LD      (NO_ARRAY),A
@@ -1278,14 +1288,17 @@ Tokenize:
 	XOR     A
         LD      (DATA_STM),A
         LD      C,05H			; Initialise line length to 5
-        LD      DE,LINE_BUFFER
+        LD      DE,LINE_BUFFER		; ie, output ptr is same as input ptr at start.
 TokenizeNext:
+;If char is a space, jump ahead to write it out.
 	LD      A,(HL)
         CP      ' '
         JP      Z,WriteChar
+;If char is a " (indicating a string literal) then freely copy up to the closing ". Obviously we don't want to tokenize string literals.
         LD      B,A
         CP      '"'
         JP      Z,FreeCopy
+;If char is null then we've reached the end of input, and can exit this function.
         OR      A
         JP      Z,Exit
         LD      A,(DATA_STM)
@@ -1301,35 +1314,43 @@ TokenizeNext:
         JP      C,L041A
         CP      '<'
         JP      C,WriteChar
-L041A:  PUSH    DE
-        LD      DE,KEYWORDS-1
-        PUSH    HL
-        DB	3Eh		; LD      A, ...
+;Here's where we start to see if we've got a keyword. B здесь содержит 0 (см. код выше где OR A; LD B,A)
+L041A:  PUSH    DE			; Preserve output ptr.
+        LD      DE,KEYWORDS-1		; 
+        PUSH    HL			; Preserve input ptr.
+        DB	3Eh			; LD      A, ...
 KwCompare:
-	RST	NextChar
+	RST	NextChar		; Get next input char
         INC     DE
-KwCompareDE:  LD      A,(DE)
-        AND     7FH
-        JP      Z, NotAKeyword
-        CP      (HL)
-        JP      NZ, NextKeyword
-        LD      A,(DE)
+KwCompareDE:
+	LD      A,(DE)			; Get keyword char to compare with.
+        AND     7FH			; Ignore bit 7 of keyword char.
+        JP      Z, NotAKeyword		; If keyword char==0, then end of keywords reached.
+        CP      (HL)			; Keyword char matches input char?
+        JP      NZ, NextKeyword		; If not, jump to get next keyword.
+; OK, so input char == keyword char. Now we test bit 7 of the keyword char : if it's 0 then we haven't yet reached the end of the keyword and so have to loop back to continue comparing.
+        LD      A,(DE)			
         OR      A
         JP      P, KwCompare
-        POP     AF
-        LD      A,B
-        OR      80H
-        DB	0F2H		; JP      P,...
-;Here we have found that the input does not lead with a keyword, so we restore the input ptr and write out the literal character.
+; Matched a keyword! First thing we do is remove input ptr from the stack, as since we're matched to a keyword we don't need to go back and try to match another keyword - HL is already the correct input ptr. Then we set A to the keyword ID which gets written out in the next block but one (notice we LXI over the next block).
+        POP     AF			; Remove input ptr from stack. We don't need it.
+        LD      A,B			; A=Keyword ID
+        OR      80H			; Set bit 7 (indicates a keyword)
+        DB	0F2H			; JP      P,...
+; Here we have found that the input does not lead with a keyword, so we restore the input ptr and write out the literal character.
 NotAKeyword:
-	POP 	HL		; Restore input ptr
-	LD 	A, (HL)		; and get input char
-        POP     DE
+	POP 	HL			; Restore input ptr
+	LD 	A, (HL)			; and get input char
+; Write character, and advance buffer pointers.
+        POP     DE			; Restore output ptr
 WriteChar:
-	INC     HL
-        LD      (DE),A
-        INC     DE
-        INC     C
+	INC     HL			; Advance input ptr
+        LD      (DE),A			; Store output char
+        INC     DE			; Advance output ptr
+        INC     C			; C++ (arf!).
+; If we've just written the ID of keyword REM then we need to freecopy the rest of the line.
+; Here we test for REM (8E) and jump back to the outer loop if it isn't. Note that if it is
+; REM, then we set B to 0 so the freecopy won't stop prematurely.
         SUB     ':'
         JP      Z,L0447
         CP      TK_DATA-':'
@@ -1337,7 +1358,7 @@ WriteChar:
 L0447:  LD      (DATA_STM),A
 L044A:  SUB     TK_REM-':'
         JP      NZ,TokenizeNext
-        LD      B,A
+        LD      B,A			; B=0
 
 ;Free copy loop. This loop copies from input to output without tokenizing, 
 ;as needs to be done for string literals and comment lines. The B register
@@ -1345,28 +1366,30 @@ L044A:  SUB     TK_REM-':'
 ;copy is complete and it jumps back
 	
 FreeCopyLoop:
-	LD      A,(HL)
-        OR      A
-        JP      Z,Exit
-        CP      B
-        JP      Z,WriteChar
+	LD      A,(HL)			; A=Input char
+        OR      A			; If char is null then exit
+        JP      Z,Exit			; 
+        CP      B			; If input char is term char then 
+        JP      Z,WriteChar		; we're done free copying.
 FreeCopy:
 	INC     HL
 	LD      (DE),A
         INC     C
         INC     DE
         JP      FreeCopyLoop
+
+; NextKeyword. Advances keyword ptr in DE to point to the next keyword in the table, then jumps back to KwCompare to see if it matches. Note we also increment the keyword ID.
 	
 NextKeyword:
-	POP     HL
+	POP     HL			; Restore input ptr
         PUSH    HL
-        INC     B
-        EX      DE,HL
+        INC     B			; Keyword ID ++
+        EX      DE,HL			; HL=keyword table ptr
 NextKwLoop:
-	OR      (HL)
-        INC     HL
-        JP      P,NextKwLoop
-        EX      DE,HL
+	OR      (HL)			; Loop until
+        INC     HL			; bit 7 of previous
+        JP      P,NextKwLoop		; keyword char is set.
+        EX      DE,HL			; DE=keyword ptr, HL=input ptr
         JP      KwCompareDE
 	
 Exit:	LD      HL,LINE_BUFFER-1
@@ -1381,24 +1404,28 @@ Exit:	LD      HL,LINE_BUFFER-1
 ;Gets a line of input into LINE_BUFFER.
 
 Backspace:
-	DEC     B
-        DEC     HL
-        RST     OutChar
-        JP      NZ,InputNext
+	DEC     B			; Char count--;
+        DEC     HL			; Input ptr--;
+        RST     OutChar			; Print backspace char.
+        JP      NZ,InputNext		; 
 ResetInput:
 	RST     OutChar
         CALL    NewLine
 InputLine:
 	LD      HL,LINE_BUFFER
         LD      B,01H
+;Get a character and jump out of here if user has pressed 'Enter'. 
 InputNext:
 	CALL    InputChar
+;Deal with backspace.
         CP      08H
         JP      Z,Backspace
         CP      0DH
         JP      Z,TerminateInput
+;Deal with line-abort..
         CP      18H
         JP      Z,ResetInput
+;If user has not given a printable character, then loop back until they do.
         CP      7FH
         JP      NC,InputNext
         CP      01H
@@ -1408,12 +1435,13 @@ InputNext:
         NOP     
         NOP     
         NOP     
+;A normal character has been pressed. Here we store it in LINE_BUFFER, only we don't if the terminal width has been exceeded. If the terminal width is exceeded then we ring the bell (ie print ASCII code 7) and ignore the char. Finally we loop back for the next input character.
         LD      C,A
         LD      A,B
         CP      72			; Длина LINE_BUFFER
         LD      A,07H
         JP      NC,IgnoreChar
-        LD      A,C
+        LD      A,C			; Write char to LINE_BUFFER.
         LD      (HL),C
         INC     HL
         INC     B
@@ -1704,6 +1732,7 @@ Stop:
         OR      0C0H
         LD      (PROG_PTR_TEMP),HL
 L05F5:  POP     BC
+
 EndOfProgram:
 	PUSH    AF
         LD      HL,(CURRENT_LINE)
@@ -5110,7 +5139,7 @@ L1741:  JP      (HL)
 Init:	XOR     A
         LD      (2200H),A
 
-		; Приветственное сообщение
+	; Приветственное сообщение
         LD      HL, szHello
 InitLoop:
 	LD      A,(HL)
