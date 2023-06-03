@@ -50,7 +50,7 @@
 ; !    Интерпретатор  Бейсика     !
 ; +-------------------------------+ 0000H
 ;
-; Lets consider the blocks of memory that follow Basic's own code in turn :
+; Рассмотрим Lets consider the blocks of memory that follow Basic's own code in turn :
 ;
 ; The minimum amount of stack space is 18 bytes - at initialisation, after the
 ; user has stated the options they want, the amount of space is reported as 
@@ -95,50 +95,77 @@
 ;
 ;
 ;
-; So as you can see, each program line has three components :
+; Таким образом, каждая строка программы состоит из трех компонент:
 ;
-; Pointer to the next line
-; Line number
-; Tokenised line content
-; The final line of the program - the last one in the above diagram - is always present and is always a null pointer to the non-existent next line. This null line, just two bytes long, is there to mark the end of the program.
-; 
+; Указатель на следующую строку
+; Номер строки
+; Токенизированная строка
+;
+; Последняя строка программы всегда присутствует и
+; содержит нулевой указатель на несуществующую следующую строку.
+; Эта нулевая строка, длиной два байта, маркер конца программы.
 
-; Заканчивая обработку очередной строки программы, интерпретатор последовательно просматривает указатели списка до тех пор, пока не будет найдена строка с требуемым номером. Конец списка помечается двумя "нулевыми" байтами. Вы таким же образом можете вручную (с помощью директив Монитора) определить, где заканчивается программа, просматривая указатель списка до тех пор, пока не обнаружите три смежных байта, заполненных нулями. Во многих практических случаях, воспользовавшись рассмотренными рекомендациями, можно восстановить программу, в которой в результате сбоя была нарушена целостность списка. После восстановления структуры списка необходимо изменить значения, хранящиеся в ячейках памяти 0245Н и 0246Н. В этих ячейках хранятся значения соответственно младшего и старшего байта конечного адреса программы. Этот адрес на двойку превосходит адрес первого байта маркера конца списка.
+; Заканчивая обработку очередной строки программы, интерпретатор 
+; последовательно просматривает указатели списка до тех пор, пока 
+; не будет найдена строка с требуемым номером. Конец списка
+; помечается двумя "нулевыми" байтами. Вы таким же образом
+; можете вручную (с помощью директив Монитора) определить,
+; где заканчивается программа, просматривая указатель списка
+; до тех пор, пока не обнаружите три смежных байта, заполненных
+; нулями. Во многих практических случаях, воспользовавшись
+; рассмотренными рекомендациями, можно восстановить программу,
+; в которой в результате сбоя была нарушена целостность списка. 
+; После восстановления структуры списка необходимо изменить значения,
+; хранящиеся в ячейках памяти 0245Н и 0246Н. В этих ячейках хранятся 
+; значения соответственно младшего и старшего байта конечного адреса 
+; программы. Этот адрес на двойку превосходит адрес первого байта 
+; маркера конца списка.
 ;
-; Variables
-; The variable support in this version of Basic is rather limited. There only permitted type of variables is numeric - no strings, structs, and of course no distinction between integers and floating-point numbers. All variables are stored and treated as floating-point.
+; Переменные
+; ----------
 ;
-; The second restriction is that variable names were a maximum of two characters in length : the first (mandatory) character had to be alphabetic, and the second (optional) character had to be a digit. Thus the following declarations are invalid :
+; Поддержка переменных в этой версии Бейсика достаточно ограниченная.
+; Разрешенный тип переменных только числовой - нет символьных, структур, и, конечно,
+; не различаются целые числи и числа с плавающей точкой. Все переменные хранятся и
+; обрабатываются как числа с плавающей точкой.
 ;
-; LET FOO=1	cross
-; LET A="HELLO"	cross
-; LET AB=A	cross
-; Whereas these declarations are valid :
+; Длина имени переменных ограничена максимум двумя символами: первый (обязательный)
+; символ должен быть букврй (латинской), а второй (опциональный) символ - число.
+; Таким образом следующие определения некорректны:
 ;
-; LET A=1	tick
-; LET B=2.5	tick
-; LET B2=5.6	tick
+; LET FOO=1
+; LET A="HELLO"
+; LET AB=A
+;
+; В то время как следующие - корректны:
+;
+; LET A=1
+; LET B=2.5
+; LET B2=5.6
 ; 	 
-; The fixed-length of variable names greatly simplified their storage. Each variable occupies 6 bytes : two bytes for the name, and four bytes for the floating-point value (fixme: link to fp).
+; Фиксированная длина переменных существенно упрощает их хранение в памяти.
+; Каждая переменная занимает 6 байт в памяти: два байта для имени и четыре
+; байта для значения переменной.
 ;
 ; Массивы
 ; -------
 ;
 ; Массивы хранятся в отдельной области памяти, сразу после области переменных. Начала области массивов определяется переменной
-; VAR_ARRAY_BASE. Массивы определяются ключевым словом DIM, and this version of Basic has the curious property where declaring
-; an array of n elements results in n+1 elements being allocated, addressable with subscript values from 0 to n inclusive.
-; Thus the following is quite legal :
+; VAR_ARRAY_BASE. Массивы определяются ключевым словом DIM. Размерность массива n приводит к выделению n+1 элементов,
+; адресуемых значениями индекса от 0 до n включительно.
+;
+; Соответственно, код ниже корректен:
 ;
 ; DIM A(2)
 ; A(0) = 1
 ; A(1) = 2
 ; A(2) = 3
 ;
-; but :
+; но:
 ;
 ; A(3) = 4
 ;
-; results in a Bad Subscript (BS) error.
+; приведет к ошибке Ошибка 09. Индекс не соответствует размерности массива.
 ;
 ; An array is stored similarly to normal variables in that we lead with the two-byte variable name. This is followed by a 16-bit integer denoting the size in bytes of the array elements; and finally the array elements themselves (4 bytes each). The example array A(2) shown above, if stored at address 0D20, would appear like this :
 ;
@@ -165,6 +192,7 @@
 MEM_TOP	EQU	03FFFH	; Верхний адрес доступной памяти
 ANSI	EQU	0	; Включить поддержку совместимости с ANSI Minimal Basic
 GOST	EQU	0	; Включить поддержку совместимости с ГОСТ 27787-88
+BASICNEW	EQU	0	; Включить мои изменения в коде
 
 	IF	ANSI
 OPTION	EQU	1	; Поддержка команды OPTION
@@ -197,7 +225,7 @@ END	EQU	0	; Поддержка команды END
 ; памяти однобайтовой инструкцией вместо стандартных 3-х байтовых вызовов
 ; CALL и подобными командами. Данные адреса называют адресами "Рестартов"
 ; и обычно используются для часто вызываемых функций, что эконоит по 2 байта на каждом вызове.
-; Всего Бейсик использует 7 рестартов.
+; Всего Бейсик использует 7 рестартов. 8-й рестарт используется отладчиками.
 
 ; Начало (RST 0)
 
@@ -209,7 +237,7 @@ Start:
 	LD	SP, MEM_TOP
 	JP	Init
 
-; Данные байты не используются?
+; Данные байты не используются? В оригинале здесь указатели на какие-то данные, а не код.
 	INC	HL
 	EX	(SP),HL
 
@@ -298,7 +326,7 @@ RST6_CONT:
 	INC	HL
 	PUSH    BC
 RST6RET:
-	JP	04F9H		; Это самомодифицирующийся код
+	JP	04F9H		; Это самомодифицирующийся код, см. PushNextWord.
 
 
 ; токены и прочие данные
@@ -686,8 +714,9 @@ KW_GENERAL_FNS:
 	DW	End
 	ENDIF
 
-;1.3 Error Codes & Globals
-;A table of two-character error codes for the 18 errors.
+;1.3 Годы ошибок и глобальные переменные
+;
+; Таблица двухсимвольных кодов для 18 ошибок.
 
 ;Ошибка 01. В программе встретился оператор NEXT, для которого не был выполнен соответствующий оператор FOR.
 ;Ошибка 02. Неверный синтаксис.
@@ -835,7 +864,8 @@ LINE_BUFFER:
 ControlChar:
 	DB		00		; Тип символа 00 - обычный символ FF - управляющий
             
-        NOP     
+DIM_OR_EVAL:
+	DB	0
         DB	01h
 DATA_STM:
 	DB	0			; Признак обработки TK_DATA
@@ -1564,25 +1594,33 @@ PrintKeyword:
 For:		
         LD      A,64H
         LD      (NO_ARRAY),A
+; First we call LET to assign the initial value to the variable. On return, HL points to the next bit of program (the TO clause with any luck)
         CALL    Let
+;Stick program ptr onto stack. We lose the return address, since we don't need it as this function conveniently falls into ExecNext by itself.
         EX      (SP),HL
         CALL    GetFlowPtr
+;Get program ptr into DE.
         POP     DE
         JP      NZ,L0547
         ADD     HL,BC
         LD      SP,HL
+;HL=prog ptr, DE=stack. Here we check we've at least 8*4 bytes of space to use for the flow struct.
 L0547:  EX      DE,HL
         CALL    CheckEnoughVarSpace2
         DB	08H
+;Get pointer to end of statement (or end of program line) onto stack. This is the prog ptr that NEXT will return to.
         PUSH    HL
         CALL    FindNextStatement
         EX      (SP),HL
+;Push current line number onto stack.
         PUSH    HL
         LD      HL,(CURRENT_LINE)
         EX      (SP),HL
         CALL    L0969
+;Syntax check that TO clause is next.
         RST     SyntaxCheck
         DB	TK_TO
+;Evaluate expression following 'TO', and push the result of that expression (a floating point number of course) on the stack
         CALL    L0966
         PUSH    HL
         CALL    FCopyToBCDE
@@ -1593,27 +1631,33 @@ L0547:  EX      DE,HL
         LD      BC,8100H
         LD      D,C
         LD      E,D
+;If a STEP clause has not been given, skip ahead with the direction byte (in A) as 0x01.
         LD      A,(HL)
         CP      TK_STEP
         LD      A,01H
         JP      NZ,PushStepValue
+;STEP clause has been given so we evaluate it and get it into BCDE. The sign of this value becomes the direction byte (0x01 for fowards, 0xFF for backwards).
         RST     NextChar
         CALL    L0966
         PUSH    HL
         CALL    FCopyToBCDE
         POP     HL
         RST     FTestSign
+;Initialise the STEP value in BCDE to 1.
 PushStepValue:
 	PUSH    BC
         PUSH    DE
+;Push A onto stack. (A=1 if no step clause, else ???)
         PUSH    AF
         INC     SP
         
+;Push the prog ptr to the end of the FOR statement (kept on PROG_PTR_TEMP) on the stack.
 	PUSH    HL
 	
 	
         LD      HL,(PROG_PTR_TEMP)
         EX      (SP),HL
+;Push TK_FOR onto the stack, and fall into ExecNext
 EndOfForHandler:
 	LD      B,TK_FOR
         PUSH    BC
@@ -2344,43 +2388,61 @@ L0914:  RST     NextChar
 Next:
         LD      DE,0000H
 L0920:  CALL    NZ,GetVar
+;Save the prog ptr in HL to PROG_PTR_TEMP. This currently points to the end of the NEXT statement, and we need to get it back later in case we find that the FOR loop has completed.
         LD      (PROG_PTR_TEMP),HL
+;GetFlowPtr to get access to the FOR flow struct on the stack.
         CALL    GetFlowPtr
         JP      NZ,WithoutFOR
         LD      SP,HL
+;Push address of FOR variable
         PUSH    DE
+;Load A with first byte of struct (0x01), advance HL, and preserve A. 
         LD      A,(HL)
         INC     HL
         PUSH    AF
+;Push address of FOR variable again.
         PUSH    DE
+;The next 4 bytes of the flow struct are the STEP number. We load this into FACCUM here.
         CALL    FLoadFromMem
+;Get FOR variable address into HL and push the struct ptr 
         EX      (SP),HL
+;Add the FOR variable to the STEP number and update the FOR variable with the result.
         PUSH    HL
         CALL    FAddFromMem
         POP     HL
         CALL    FCopyToMem
+;Restore struct ptr to HL. This now points to the TO number, which we load into BCDE.
         POP     HL
         CALL    FLoadBCDEfromMem
+;Compare the updated FOR variable (in FACCUM) with the TO number (in BCDE). The result of the compare is in A and will be 0xFF if FOR var is less than the TO number, 0x00 if equal, and 0x01 if the FOR variable is greater than the TO number.
         PUSH    HL
         CALL    FCompare
         POP     HL
+;Restore the direction byte to B. Remember this is 0x01 for forward iteration, 0xFF for backwards (when there is a -ve STEP number).
         POP     BC
+;This is marvellous! By subtracting the direction byte from the result of FCompare we can tell if the FOR loop has completed (the result of the subtraction will be zero) with the minimum of fuss. Read the two above comments and it should make sense.
         SUB     B
+;NOT loading a floating point number, this is just a handy way of getting the last four bytes of the struct. BC is loaded with the prog ptr to just beyond the FOR statement, and DE is loaded with the line number of the FOR statement.
         CALL    FLoadBCDEfromMem
-        JP      Z,L0958
+;If FOR loop is complete (see two comments up) then jump ahead.
+        JP      Z,ForLoopIsComplete
+;FOR loop is not yet complete. Here we save the line number of the FOR statement to the CURRENT_LINE variable, load HL with the prog ptr to the end of the FOR statement, and jump to EndOfForHandler which pushes the last byte of the for_struct on the stack and falls into ExecNext.
         EX      DE,HL
         LD      (CURRENT_LINE),HL
         LD      L,C
         LD      H,B
         JP      EndOfForHandler
 	
-L0958:  LD      SP,HL
+;The FOR loop is complete. Therefore we don't need the for_struct on the stack any more, and since HL points just past it we can load the stack pointer from HL to reclaim that bit of stack space.
+ForLoopIsComplete:
+	LD      SP,HL
         LD      HL,(PROG_PTR_TEMP)
         LD      A,(HL)
-        CP      2CH
+        CP      ','			;2CH
         JP      NZ,ExecNext
         RST     NextChar
         CALL    L0920
+
 L0966:  CALL    EvalExpression
 L0969:  OR      37H
 L096B:  LD      A,(0219H)
@@ -2398,15 +2460,19 @@ EvalExpression:
 	DEC     HL
         LD      D,00H
 L0978:  PUSH    DE
+;Check we've got enough space for one floating-point number.
         CALL    CheckEnoughVarSpace2
 	DB	01h
+;Evaluate term and store prog ptr in 015f
 	CALL	EvalTerm
         LD      (PROG_PTR_TEMP2),HL
-L0983:  LD      HL,(PROG_PTR_TEMP2)
+ArithParse:
+	LD      HL,(PROG_PTR_TEMP2)
         POP     BC
         LD      A,B
         CP      78H
         CALL    NC,L0969
+;Get byte following sub-expression. This is where we deal with arithmetic operators. If the byte is less than KWID_+ then return.
         LD      A,(HL)
         LD      D,00H
 L0990:  SUB     0ABH
@@ -2452,39 +2518,53 @@ L09AA:  LD      A,D
 
         INC     HL
         CALL    L0969
+;Push counter and address of ArithParse onto the stack (the latter so we return to it after the arith fn runs)
 L09D2:  PUSH    BC
-        LD      BC,L0983
+        LD      BC,ArithParse
         PUSH    BC
+;Push FACCUM, taking care to preserve the operator precedence byte in D.
         LD      B,E
         LD      C,D
         CALL    FPush
         LD      E,B
         LD      D,C
+;Push address of arithmetic fn and jump back to 
         RST     PushNextWord
         LD      HL,(0231H)
         JP      L0978
 	
+;EvalTerm
+
+;Evaluates a term in an expression. This can be a numeric constant, a variable, an inline function call taking a full expression as an argument, or a bracketed expression.
+;Get first character of term, and if it's a digit (as indicated by the carry flag) then jump to FIn
+
 EvalTerm:
 	XOR     A
 L09E6:  LD      (0219H),A
         RST     NextChar
         JP      C,FIn
+;If the character is alphabetic then we have a variable, so jump ahead to get it.
         CALL    CharIsAlpha
-        JP      NC,L0A2F
-        CP      0A4H
+        JP      NC,EvalVarTerm
+;If the character is a leading '+' then simply ignore it and jump back to EvalTerm.
+        CP      TK_PLUS			;0A4H
         JP      Z,EvalTerm
-        CP      2EH
+;If the character is a leading '.' then that's a decimal point, so jump to FIn
+        CP      '.'			;2EH
         JP      Z,FIn
-        CP      0A5H
-        JP      Z,L0A1E
+;If the character is a leading '-' then jump head to EvalMinusTerm
+        CP      TK_MINUS		;0A5H
+        JP      Z,EvalMinusTerm	;L0A1E
         CP      22H
         JP      Z,L0D50
         CP      0A2H
         JP      Z,L0AF9
         CP      0A0H
         JP      Z,L0CCD
-        SUB     0AEH
-        JP      NC,L0A40
+;If the character is the keyword ID of an inline function them jump ahead to deal with that.
+        SUB     TK_SGN			; 0AEH
+        JP      NC,EvalInlineFn
+;The only possibility left is a bracketed expression. Here we check for an opening bracket, recurse into EvalExpression, and return.
 L0A16:  RST     SyntaxCheck
         DB	'('
 	CALL	EvalExpression
@@ -2492,6 +2572,7 @@ L0A16:  RST     SyntaxCheck
 L0A1C:  DB	')'
         RET     
 
+EvalMinusTerm:
 L0A1E:  LD      D,7DH
         CALL    L0978
         LD      HL,(PROG_PTR_TEMP2)
@@ -2501,7 +2582,9 @@ L0A1E:  LD      D,7DH
         POP     HL
         RET     
 
-L0A2F:  CALL    GetVar
+;Evaluate a variable. The call to GetVar returns the address of the variable's value in DE, which is then moved to HL then the call to FLoadFromMem loads FACCUM with the variable's value.
+EvalVarTerm:
+	CALL    GetVar
         PUSH    HL
         EX      DE,HL
         LD      (FACCUM),HL
@@ -2511,7 +2594,9 @@ L0A2F:  CALL    GetVar
         POP     HL
         RET     
 
-L0A40:  LD      B,00H
+;Evaluate an inline function. First we get the offset into the KW_INLINE_FNS table into BC and stick it on the stack.
+EvalInlineFn:
+	LD      B,00H
         RLCA    
         LD      C,A
         PUSH    BC
@@ -2664,7 +2749,7 @@ L0AF9:  LD      D,5AH
         CPL     
         CALL    L0C9B
         POP     BC
-        JP      L0983
+        JP      ArithParse
 
 ;1.18 Variable Management
 ;Dim
@@ -2683,8 +2768,8 @@ Dim:
         LD      BC,DimContd
         PUSH    BC
         DB	0f6h	; OR      0AFH
-GetVar:	XOR	A
-        LD      (0218H),A
+GetVar:	XOR	A          ; AFH
+        LD      (DIM_OR_EVAL),A
         LD      B,(HL)
 L0B1F:  CALL    CharIsAlpha
         JP      C,SyntaxError
@@ -2718,7 +2803,9 @@ L0B4C:  LD      A,(NO_ARRAY)
         LD      HL,(VAR_ARRAY_BASE)
         EX      DE,HL
         LD      HL,(VAR_BASE)
-L0B61:  RST     CompareHLDE
+
+FindVarLoop:
+	RST     CompareHLDE
         JP      Z,L0B78
         LD      A,C
         SUB     (HL)
@@ -2732,8 +2819,9 @@ L0B6D:  INC     HL
         INC     HL
         INC     HL
         INC     HL
-        JP      L0B61
+        JP      FindVarLoop
 
+AllocNewVar:
 L0B78:  PUSH    BC
         LD      BC,0006H
         LD      HL,(VAR_TOP)
@@ -2760,8 +2848,9 @@ L0B9B:  EX      DE,HL
         POP     HL
         RET     
 
+
 L0B9E:  PUSH    HL
-        LD      HL,(0218H)
+        LD      HL,(DIM_OR_EVAL)
         EX      (SP),HL
         LD      D,00H
 L0BA5:  PUSH    DE
@@ -2782,7 +2871,7 @@ L0BA5:  PUSH    DE
         DB	')'
         LD      (PROG_PTR_TEMP2),HL
         POP     HL
-        LD      (0218H),HL
+        LD      (DIM_OR_EVAL),HL
         PUSH    DE
         LD      HL,(VAR_ARRAY_BASE)
         LD      A,19H
@@ -2803,7 +2892,7 @@ L0BD8:  INC     HL
         LD      D,(HL)
         INC     HL
         JP      NZ,0BC6h
-        LD      A,(0218H)
+        LD      A,(DIM_OR_EVAL)
         OR      A
         LD      E,ERR_DD
         JP      NZ,Error
@@ -2828,7 +2917,7 @@ L0BF3:  LD      DE,0004H
         LD      B,C
         LD      (HL),B
         INC     HL
-L0C0A:  LD      A,(0218H)
+L0C0A:  LD      A,(DIM_OR_EVAL)
         OR      A
         LD      A,B
         LD      BC,000BH
@@ -2860,7 +2949,7 @@ L0C34:  DEC     HL
         JP      NZ,L0C34
         INC     BC
         LD      H,A
-        LD      A,(0218H)
+        LD      A,(DIM_OR_EVAL)
         OR      A
         LD      A,(0C01H)
         LD      L,A
@@ -3770,7 +3859,8 @@ FSubMantissas:
 
 FNormalise:
 	CALL    C,FNegateInt
-L10D3:  LD      L,B
+FNormalise3:
+	LD      L,B
         LD      H,E
         XOR     A
 L10D6:  LD      B,A
@@ -3997,7 +4087,7 @@ L11B3:  LD      BC,8031H
 FMul:
 	POP	BC
 	POP	DE
-L11BC:  RST     FTestSign
+FMul2:	RST     FTestSign
         RET     Z
 
         LD      L,00H
@@ -4009,7 +4099,7 @@ L11BC:  RST     FTestSign
         LD      BC,0000H
         LD      D,B
         LD      E,B
-        LD      HL,L10D3
+        LD      HL,FNormalise3
         PUSH    HL
         LD      HL,FMulOuterLoop
         PUSH    HL
@@ -4861,14 +4951,14 @@ L1581:  POP     HL
         CALL    L117E
         POP     BC
         POP     DE
-        CALL    L11BC
+        CALL    FMul2
 	
 	ORG	1599h
 Exp:
 L1599:  CALL    FPush
         LD      BC,8138H
         LD      DE,0AA3BH
-        CALL    L11BC
+        CALL    FMul2
         LD      A,(FACCUM+3)
         CP      88H
         JP      NC,L12A8
@@ -4891,7 +4981,7 @@ L1599:  CALL    FPush
         LD      DE,0000H
         POP     BC
         LD      C,D
-        JP      L11BC
+        JP      FMul2
 	
 	DB	08h
         LD      B,B
@@ -4927,7 +5017,7 @@ L15FA:  CALL    FPush
         PUSH    DE
         PUSH    HL
         CALL    FCopyToBCDE
-        CALL    L11BC
+        CALL    FMul2
         POP     HL
 L1609:  CALL    FPush
         LD      A,(HL)
@@ -4944,7 +5034,7 @@ L1612:	POP	AF
         PUSH    BC
         PUSH    AF
         PUSH    HL
-        CALL    L11BC
+        CALL    FMul2
         POP     HL
         CALL    FLoadBCDEfromMem
         PUSH    HL
@@ -4952,32 +5042,42 @@ L1612:	POP	AF
         POP     HL
         JP      L1612
 
+;Rnd
+;Generates a random number. This is a bit odd... like all inline functions it takes a numeric argument, but in RNDs case this argument is mostly ignored. If it's a negative number it skips a couple of stages of reseeding RND_SEED.
+
 	ORG	162ah
 Rnd:
+;If tghe argument in FACCUM is negative, then skip over the
 	RST     FTestSign
         JP      M,L1647
+;Load the seed into FACCUM.
         LD      HL,RND_SEED
         CALL    FLoadFromMem
         RET     Z
-
+;Multiply seed by 11,879,546.
         LD      BC,9835H
         LD      DE,447AH
-        CALL    L11BC
+        CALL    FMul2
+;Add 0.00000003927678
         LD      BC,6828H
         LD      DE,0B146H
         CALL    FAddBCDE
+;Swap first and third mantissa bytes.
 L1647:  CALL    FCopyToBCDE
         LD      A,E
         LD      E,C
         LD      C,A
-        LD      (HL),80H
+;Set FTEMP_SIGN to 0x80 to indicate to FNormalise that it doesn't need to change the sign. Also set FACCUM's exponent to 0 so the result, when normalised, will be less than 1.        LD      (HL),80H
         DEC     HL
         LD      B,(HL)
         LD      (HL),80H
-        CALL    L10D3
+        CALL    FNormalise3
+;Exit via a copy of the result to RND_SEED so it can be used for the next time RND is called.
         LD      HL,RND_SEED
         JP      FCopyToMem
 
+;Seed for random number generation.
+;@todo Здесь не код, а данные
 RND_SEED:	
         LD      D,D
         RST     00H
@@ -4986,17 +5086,21 @@ RND_SEED:
 	
 	ORG	1660H
 Cos:
-L1660:  LD      HL,16A6H
+	LD      HL,16A6H
         CALL    FAddFromMem
 	ORG	1666h
+
+;Divide x (in FACCUM) by 2p to get u. 
+
 Sin:
-L1666:  CALL    FPush
-        LD      BC,8349H
+	CALL    FPush
+        LD      BC,8349H		; 2*PI
         LD      DE,0FDBH
         CALL    FLoadFromBCDE
         POP     BC
         POP     DE
         CALL    L121A
+;Lose the integer part of u.
         CALL    FPush
         CALL    Int
         POP     BC
@@ -5006,11 +5110,13 @@ L1666:  CALL    FPush
         CALL    FSubFromMem
         RST     FTestSign
         SCF     
-        JP      P,L1692
+        JP      P,NegateIfPositive
         CALL    FAddOneHalf
         RST     FTestSign
         OR      A
-L1692:  PUSH    AF
+
+NegateIfPositive:
+	PUSH    AF
         CALL    P,FNegate
         LD      HL,16AAH
         CALL    FAddFromMem
@@ -5047,13 +5153,13 @@ L1692:  PUSH    AF
 	ORG	16c3h	
 Tan:
         CALL    FPush
-        CALL    L1666
+        CALL    Sin
         POP     BC
         POP     HL
         CALL    FPush
         EX      DE,HL
         CALL    FLoadFromBCDE
-        CALL    L1660
+        CALL    Cos
         JP      L1218
 
 	ORG	16D8h
@@ -5135,12 +5241,22 @@ Usr:
 	
 L1741:  JP      (HL)
 
+; Начальная инициализация.
+; =======================
+; В отличие от Altair BASIC, в данной версии конфигурация памяти не настраивается
+; динамически, а статично вбита в код.
+;
 ; Выставляем маркер конца программы (по описанию должно быть 2 байта...)
 Init:	XOR     A
         LD      (2200H),A
 
-	; Приветственное сообщение
+	; Приветственное сообщение. Неясно, почему не использована функция МОНИТОРа...
         LD      HL, szHello
+
+	IF	BASICNEW
+	CALL	0F818H
+	JP	Main
+	ELSE
 InitLoop:
 	LD      A,(HL)
         OR      A			; CP 0
@@ -5149,13 +5265,14 @@ InitLoop:
         INC     HL
         CALL    0F809h
         JP      InitLoop
+	ENDIF
 		
-szHello:		DB		1Fh, 0Dh, 0Ah, 2Ah, 4Dh, 69h, 6Bh, 72h, 4Fh, 2Fh
-			DB		38h, 30h, 2Ah, 20h, 42h, 41h, 53h, 49h, 43h, 00h
+szHello:		DB		1Fh, 0Dh, 0Ah, "*MikrO/80* BASIC", 0	;2Ah, 4Dh, 69h, 6Bh, 72h, 4Fh, 2Fh
+;			DB		38h, 30h, 2Ah, 20h, 42h, 41h, 53h, 49h, 43h, 00h
 
 	ORG	176ah
 Cur:
-L176A:  CALL    L0FB9
+	CALL    L0FB9
         LD      (1957H),A
         RST     SyntaxCheck
         DB	','
