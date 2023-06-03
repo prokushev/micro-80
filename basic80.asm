@@ -190,10 +190,11 @@
 
 ; Конфигурация
 MEM_TOP	EQU	03FFFH	; Верхний адрес доступной памяти
+BASICNEW	EQU	0	; Включить мои изменения в коде
 ANSI	EQU	0	; Включить поддержку совместимости с ANSI Minimal Basic
 GOST	EQU	0	; Включить поддержку совместимости с ГОСТ 27787-88
-BASICNEW	EQU	0	; Включить мои изменения в коде
 
+	IF	BASICNEW
 	IF	ANSI
 OPTION	EQU	1	; Поддержка команды OPTION
 LET	EQU	1	; Поддержка команды LET
@@ -212,6 +213,24 @@ RANDOMIZE EQU	0	; Поддержка команды RANDOMIZE
 END	EQU	0	; Поддержка команды END
 	ENDIF
 	ENDIF
+	ELSE
+OPTION	EQU	0	; Поддержка команды OPTION
+LET	EQU	0	; Поддержка команды LET
+RANDOMIZE EQU	0	; Поддержка команды RANDOMIZE
+END	EQU	0	; Поддержка команды END
+	ENDIF
+
+	IF	BASICNEW
+CHK	MACRO	adr, msg
+	ENDM
+	ELSE
+CHK	MACRO	adr, msg
+		IF	adr-$
+			ERROR	msg
+		ENDIF
+	ENDM
+	ENDIF
+
 ; 
 ;********************
 ;* 1. Интерпретатор *
@@ -232,6 +251,14 @@ END	EQU	0	; Поддержка команды END
 ; Запуск интерпретатора осуществляется с адреса 0. Проводится инициализация стека и
 ; переход на код инициализации.
 
+	IF	BASICNEW
+	ORG	100H
+RST	MACRO	adr
+	CALL	adr
+	ENDM
+	ELSE
+	ORG	0
+	ENDIF
 
 Start:
 	LD	SP, MEM_TOP
@@ -257,7 +284,8 @@ SyntaxCheck:
 	JP	NZ,SyntaxError
 
 ;NextChar (RST 2)
-;Return next character of input from the buffer at HL, skipping over space characters. 
+;
+;Возвращает следующий введенный символ из буфера по адресу HL, skipping over space characters. 
 ;The Carry flag is set if the returned character is not alphanumeric,
 ; also the zero flag is set if a null character has been reached.
 
@@ -399,243 +427,179 @@ KW_ARITH_OP_FNS:
 
 ; Основные ключевые слова
 
-	ORG	088h
+	CHK	088h, "Сдвижка кода"
 ; LET и END выкинули зачем-то... И этим поломали совместимость... В отчечественных бейсиках так много где произошло...
+
+TOKEN	MACRO	name
+name	EQU	Q
+Q	SET	Q+1
+	ENDM
 
 KEYWORDS:
 Q	SET	80h
-TK_CLS	EQU	Q
+	TOKEN	TK_CLS
 	DB	"CL", 'S'+80h	;	80
-Q	SET	Q+1
-TK_FOR	EQU	Q
+	TOKEN	TK_FOR
 	DB	"FO", 'R'+80h	;	81
-Q	SET	Q+1
-TK_NEXT	EQU	Q
+	TOKEN	TK_NEXT
 	DB	"NEX", 'T'+80h	;	82
-Q	SET	Q+1
-TK_DATA	EQU	Q
+	TOKEN	TK_DATA
 	DB	"DAT", 'A'+80h	;	83
-Q	SET	Q+1
-TK_INPUT	EQU	Q
+	TOKEN	TK_INPUT
 	DB 	"INPU", 'T'+80h	;	84
-Q	SET	Q+1
-TK_DIM	EQU	Q
+	TOKEN	TK_DIM
 	DB 	"DI", 'M'+80h	;	85
-Q	SET	Q+1
-TK_READ	EQU	Q
+	TOKEN	TK_READ
 	DB 	"REA", 'D'+80h	;	86
-Q	SET	Q+1
-TK_CUR	EQU	Q
+	TOKEN	TK_CUR
 	DB 	"CU",	'R'+80h	;	87
-Q	SET	Q+1
-TK_GOTO	EQU	Q
+	TOKEN	TK_GOTO
 	DB 	"GOT", 'O'+80h	;	88
-Q	SET	Q+1
-TK_RUN	EQU	Q
+	TOKEN	TK_RUN
 	DB 	"RU", 'N'+80h	;	89
-Q	SET	Q+1
-TK_IF	EQU	Q
+	TOKEN	TK_IF
 	DB 	"I", 'F'+80h	;	8A
-Q	SET	Q+1
-TK_RESTORE	EQU	Q
+	TOKEN	TK_RESTORE
 	DB 	"RESTOR", 'E'+80h	;	8B
-Q	SET	Q+1
-TK_GOSUB	EQU	Q
+	TOKEN	TK_GOSUB
 	DB 	"GOSU", 'B'+80h	;	8C
-Q	SET	Q+1
-TK_RETURN	EQU	Q
+	TOKEN	TK_RETURN
 	DB 	"RETUR", 'N'+80h;	8D
-Q	SET	Q+1
-TK_REM	EQU	Q
+	TOKEN	TK_REM
 	DB 	"RE", 'M'+80h	;	8E
-Q	SET	Q+1
-TK_STOP	EQU	Q
+	TOKEN	TK_STOP
 	DB 	"STO", 'P'+80h	;	8F
-Q	SET	Q+1
-TK_OUT	EQU	Q
+	TOKEN	TK_OUT
 	DB	"OU", 'T'+80h	;	90
-Q	SET	Q+1
-TK_ON	EQU	Q
+	TOKEN	TK_ON
 	DB	"O", 'N'+80h	;	91
-Q	SET	Q+1
-TK_PLOT	EQU	Q
+	TOKEN	TK_PLOT
 	DB	"PLO", 'T'+80h	;	92
-Q	SET	Q+1
-TK_LINE	EQU	Q
+	TOKEN	TK_LINE
 	DB	"LIN", 'E'+80h	;	93
-Q	SET	Q+1
-TK_POKE	EQU	Q
+	TOKEN	TK_POKE
 	DB	"POK", 'E'+80h	;	94
-Q	SET	Q+1
-TK_PRINT	EQU	Q
+	TOKEN	TK_PRINT
 	DB 	"PRIN", 'T'+80h	;	95
-Q	SET	Q+1
-TK_DEF	EQU	Q
+	TOKEN	TK_DEF
 	DB	"DE", 'F'+80h	;	96
-Q	SET	Q+1
-TK_CONT	EQU	Q
+	TOKEN	TK_CONT
 	DB	"CON", 'T'+80h	;	97
-Q	SET	Q+1
-TK_LIST	EQU	Q
+	TOKEN	TK_LIST
 	DB 	"LIS", 'T'+80h	;	98
-Q	SET	Q+1
-TK_CLEAR	EQU	Q
+	TOKEN	TK_CLEAR
 	DB 	"CLEA", 'R'+80h	;	99
-Q	SET	Q+1
-TK_MLOAD	EQU	Q
+	TOKEN	TK_MLOAD
 	DB	"MLOA", 'D'+80h	;	9a
-Q	SET	Q+1
-TK_MSAVE	EQU	Q
+	TOKEN	TK_MSAVE
 	DB	"MSAV", 'E'+80h	;	9b
-Q	SET	Q+1
-TK_NEW	EQU	Q
+	TOKEN	TK_NEW
 	DB 	"NE" , 'W'+80h	;	9c
 	IF	OPTION
-Q	SET	Q+1
-TK_OPTION	EQU	Q
+	TOKEN	TK_OPTION
 	DB	"OPTIO", 'N'+80h
 	ENDIF
 	IF	LET
-Q	SET	Q+1
-TK_LET	EQU	Q
+	TOKEN	TK_LET
 	DB	"LE", 'T'+80h
 	ENDIF
 	IF	RANDOMIZE
-Q	SET	Q+1
-TK_RANDOMIZE	EQU	Q
+	TOKEN	TK_RANDOMIZE
 	DB	"RANDOMIZE", 'E'+80h
 	ENDIF
 	IF	END
-Q	SET	Q+1
-TK_END	EQU	Q
+	TOKEN	TK_END
 	DB	"EN", 'D'+80h
 	ENDIF
-;Supplementary keywords
-Q	SET	Q+1
+
 TKCOUNT	EQU	Q-80H
-TK_TAB	EQU	Q
+
+;Supplementary keywords
+	TOKEN	TK_TAB
 	DB 	"TAB", '('+80h	;	9d
-Q	SET	Q+1
-TK_TO	EQU	Q
+	TOKEN	TK_TO
 	DB 	"T", 'O'+80h	;	9e
-Q	SET	Q+1
-TK_SPC	EQU	Q
+	TOKEN	TK_SPC
 	DB	"SPC", '('+80h	;	9f
-Q	SET	Q+1
-TK_FN	EQU	Q
+	TOKEN	TK_FN
 	DB	"F", 'N'+80h	;	a0
-Q	SET	Q+1
-TK_THEN	EQU	Q
+	TOKEN	TK_THEN
 	DB 	"THE", 'N'+80h	;	a1
-Q	SET	Q+1
-TK_NOT	EQU	Q
+	TOKEN	TK_NOT
 	DB	"NO", 'T'+80h	;	a2
-Q	SET	Q+1
-TK_STEP	EQU	Q
+	TOKEN	TK_STEP
 	DB 	"STE", 'P'+80h	;	a3
+
 ;Arithmetic and logical operators
-Q	SET	Q+1
-TK_PLUS	EQU	Q
+	TOKEN	TK_PLUS
 	DB 	"+"+80h		;	a4
-Q	SET	Q+1
-TK_MINUS	EQU	Q
+	TOKEN	TK_MINUS
 	DB 	"-"+80h		;	a5
-Q	SET	Q+1
-TK_MUL	EQU	Q
+	TOKEN	TK_MUL
 	DB	"*"+80h		;	a6
-Q	SET	Q+1
-TK_DIV	EQU	Q
+	TOKEN	TK_DIV
 	DB 	"/"+80h		;	a7
-Q	SET	Q+1
-TK_POWER	EQU	Q
+	TOKEN	TK_POWER
 	DB	'^'+80h		;	a8
-Q	SET	Q+1
-TK_AND	EQU	Q
+	TOKEN	TK_AND
 	DB	"AN", 'D'+80h	;	a9
-Q	SET	Q+1
-TK_OR	EQU	Q
+	TOKEN	TK_OR
 	DB	"O", 'R'+80h	;	aa
-Q	SET	Q+1
-TK_GT	EQU	Q
+	TOKEN	TK_GT
 	DB 	">"+80h		;	ab
-Q	SET	Q+1
-TK_EQ	EQU	Q
+	TOKEN	TK_EQ
 	DB	"="+80h		;	ac
-Q	SET	Q+1
-TK_LT	EQU	Q
+	TOKEN	TK_LT
 	DB 	"<"+80h		;	ad
+
 ;Inline keywords
-Q	SET	Q+1
-TK_SGN	EQU	Q
+	TOKEN	TK_SGN
 	DB 	"SG", 'N'+80h	;	ae
-Q	SET	Q+1
-TK_INT	EQU	Q
+	TOKEN	TK_INT
 	DB 	"IN", 'T'+80h	;	af
-Q	SET	Q+1
-TK_ABS	EQU	Q
+	TOKEN	TK_ABS
 	DB 	"AB", 'S'+80h	;	b0
-Q	SET	Q+1
-TK_USR	EQU	Q
+	TOKEN	TK_USR
 	DB 	"US", 'R'+80h	;	b1
-Q	SET	Q+1
-TK_FRE	EQU	Q
+	TOKEN	TK_FRE
 	DB	"FR", 'E'+80h	;	b2
-Q	SET	Q+1
-TK_INP	EQU	Q
+	TOKEN	TK_INP
 	DB	"IN", 'P'+80h	;	b3
-Q	SET	Q+1
-TK_POS	EQU	Q
+	TOKEN	TK_POS
 	DB	"PO", 'S'+80h	;	b4
-Q	SET	Q+1
-TK_SQR	EQU	Q
+	TOKEN	TK_SQR
 	DB 	"SQ", 'R'+80h	;	b5
-Q	SET	Q+1
-TK_RND	EQU	Q
+	TOKEN	TK_RND
 	DB 	"RN", 'D'+80h	;	b6
-Q	SET	Q+1
-TK_LOG	EQU	Q
+	TOKEN	TK_LOG
 	DB	"LO", 'G'+80h	;	b7
-Q	SET	Q+1
-TK_EXP	EQU	Q
+	TOKEN	TK_EXP
 	DB	"EX", 'P'+80h	;	b8
-Q	SET	Q+1
-TK_COS	EQU	Q
+	TOKEN	TK_COS
 	DB	"CO", 'S'+80h	;	b9
-Q	SET	Q+1
-TK_SIN	EQU	Q
+	TOKEN	TK_SIN
 	DB 	"SI", 'N'+80h	;	ba
-Q	SET	Q+1
-TK_TAN	EQU	Q
+	TOKEN	TK_TAN
 	DB	"TA", 'N'+80h	;	bb
-Q	SET	Q+1
-TK_ATN	EQU	Q
+	TOKEN	TK_ATN
 	DB	"AT", 'N'+80h	;	bc
-Q	SET	Q+1
-TK_PEEK	EQU	Q
+	TOKEN	TK_PEEK
 	DB	"PEE", 'K'+80h	;	bd
-Q	SET	Q+1
-TK_LEN	EQU	Q
+	TOKEN	TK_LEN
 	DB	"LE", 'N'+80h	;	be
-Q	SET	Q+1
-TK_STRS	EQU	Q
+	TOKEN	TK_STRS
 	DB	"STR", '$'+80h	;	bf
-Q	SET	Q+1
-TK_VAL	EQU	Q
+	TOKEN	TK_VAL
 	DB	"VA", 'L'+80h	;	c0
-Q	SET	Q+1
-TK_ASC	EQU	Q
+	TOKEN	TK_ASC
 	DB	"AS", 'C'+80h	;	c1
-Q	SET	Q+1
-TK_CHRS	EQU	Q
+	TOKEN	TK_CHRS
 	DB	"CHR", '$'+80h	;	c2
-Q	SET	Q+1
-TK_LEFTS	EQU	Q
+	TOKEN	TK_LEFTS
 	DB	"LEFT", '$'+80h	;	c3
-Q	SET	Q+1
-TK_RIGHTS	EQU	Q
+	TOKEN	TK_RIGHTS
 	DB	"RIGHT", '$'+80h	;c4
-Q	SET	Q+1
-TK_MIDS	EQU	Q
+	TOKEN	TK_MIDS
 	DB	"MID", '$'+80h	;	c5
 ; --------------- Это потом из микрона возмем
 ;c7:SCREEN$( 1eee 1fd8 1a39
@@ -667,9 +631,7 @@ TK_MIDS	EQU	Q
 ;KW_GENERAL_FNS
 ;Pointers to the functions for the 20 general keywords at the start of the KEYWORDS table above.
 
-
-
-	ORG	0170H
+	CHK	0170H, "Сдвижка кода"
 	
 KW_GENERAL_FNS:
 	DW	Cls		;	END		17B3
@@ -780,7 +742,7 @@ ERR_CN	EQU	$-ERROR_CODES
 ERR_UF	EQU	$-ERROR_CODES
 	DB	'1','8'+80h	; 22H Undefined function
 
-	org 01ceh
+	CHK 01ceh, "Сдвижка кода"
 
 ;LINE_BUFFER
 ;Buffer for a line of input or program, 73 bytes long.
@@ -859,7 +821,7 @@ LINE_BUFFER:
 	DB	32h, 32h, 37h, 30h
 	NOP
 
-	ORG     0216h
+	CHK     0216h, "Сдвижка кода"
 	NOP     
 ControlChar:
 	DB		00		; Тип символа 00 - обычный символ FF - управляющий
@@ -901,7 +863,7 @@ CURRENT_LINE:
 	DW	0FFFFH		; Номер текущей исполняемой строки FFFF - никакая не исполняется
 	DB	6eh, 0ah
 	db	0,0
-	ORG	0241H
+	CHK	0241H, "Сдвижка кода"
 STACK_TOP:
 	DW	03fcdh				; Верхушка стека бейсика
 PROGRAM_BASE:
@@ -919,7 +881,7 @@ FTEMP:	DB	0c2h
 	db	20h
 	db	32h, 35h,36h, 0 ; "256"
 	db	30h, 30h,30h, 0	; "000"
-	ORG	025bh
+	CHK	025bh, "Сдвижка кода"
 	NOP     
         NOP     
         NOP     
@@ -941,7 +903,7 @@ szStop:		DB		0Dh, 0Ah, 73h, 74h, 6Fh, 70h, 0A0h, 00h		; "СТОП "
 ; if this was called by the NEXT keyword handler then DE is pointing to 
 ; the variable following the NEXT keyword.
 
-	ORG 027ah
+	CHK 027ah, "Сдвижка кода"
 
 
 ; The first four bytes on the stack are (or rather, should be) two return addresses.
@@ -1250,7 +1212,7 @@ FindProgramLineInMem:
 ;Keyword NEW. Writes the null line number to the bottom of program storage (ie an empty program), updates pointer to variables storage,
 ; and falls into RUN which just happens to do the rest of the work NEW needs to do.
 
-	ORG	039Dh
+	CHK	039Dh, "Сдвижка кода"
 New:		
         RET     NZ
 
@@ -1533,7 +1495,7 @@ InputChar:
 ; is more complex than a simple memory dump. When it meets a 
 ;keyword ID it looks it up in the keywords table and prints it.
 
-	ORG	04EEH
+	CHK	04EEH, "Сдвижка кода"
 List:
         CALL    LineNumberFromStr
         RET     NZ
@@ -1590,7 +1552,7 @@ PrintKeyword:
 ;called the once. Subsequent iterations of the loop return to the following
 ;statement or program line, not the FOR statement itself.
 
-	ORG	0535H
+	CHK	0535H, "Сдвижка кода"
 For:		
         LD      A,64H
         LD      (NO_ARRAY),A
@@ -1720,7 +1682,7 @@ ExecA:
         PUSH    BC
         EX      DE,HL
 		
-; ЭТо дублирующий код из RST NextChar
+; Это дублирующий код из RST NextChar
 NextChar2:
 	INC     HL
         LD      A,(HL)
@@ -1743,7 +1705,7 @@ NextChar_tail:
 ;Restore
 ;Resets the data pointer to just before the start of the program.
 
-	ORG	05DBh
+	CHK	05DBh, "Сдвижка кода"
 Restore:
 	EX      DE,HL
         LD      HL,(PROGRAM_BASE)
@@ -1769,7 +1731,7 @@ CheckBreak:
 	CALL    InputChar
         CP      03H
 	
-	ORG	05efh
+	CHK	05efh, "Сдвижка кода"
 Stop:
         RET     NZ
 
@@ -1794,7 +1756,7 @@ L0609:  XOR     A
         JP      NZ, PrintInLine
         JP      Main
 
-	ORG	0617H
+	CHK	0617H, "Сдвижка кода"
 Cont:	
         RET     NZ
 
@@ -1892,7 +1854,7 @@ NextLineNumChar:
         POP     HL
         JP      NextLineNumChar
 	
-	ORG	0682H
+	CHK	0682H, "Сдвижка кода"
 Clear:
         JP      Z,ClearAll
         CALL    L0642
@@ -1919,7 +1881,7 @@ Clear:
         POP     HL
         JP      ClearAll
 ;;;		
-	ORG	06ABH
+	CHK	06ABH, "Сдвижка кода"
 Run:
         JP      Z,ResetAll
         CALL    ClearAll
@@ -1929,7 +1891,7 @@ Run:
 ;Gosub
 ;Gosub sets up a flow struct on the stack and then falls into Goto. The flow struct is KWID_GOSUB, preceded by the line number of the gosub statement, in turn preceded by prog ptr to just after the gosub statement.
 	
-	ORG	06B7H
+	CHK	06B7H, "Сдвижка кода"
 Gosub:
         CALL    CheckEnoughVarSpace2
         DB	03h
@@ -1948,7 +1910,7 @@ GosubBC:  PUSH    BC
 ;Sets program execution to continue from the line number argument.
 
 ;Get line number argument in DE and return NZ indicating syntax error if the argument was a non-number .
-	ORG	06C7H
+	CHK	06C7H, "Сдвижка кода"
 Goto:
 	CALL    LineNumberFromStr
         CALL    Rem
@@ -1971,7 +1933,7 @@ Goto:
 ;		Return
 ;Returns program execution to the statement following the last GOSUB. Information about where to return to is kept on the stack in a flow struct (see notes).
 
-	ORG	06e3h
+	CHK	06e3h, "Сдвижка кода"
 Return:
 
 ;No arguments allowed.
@@ -2078,7 +2040,7 @@ L0755:  PUSH    HL
 
 ; Обработчик ON x GOTO/ON x GOSUB
 
-	ORG	075Ch
+	CHK	075Ch, "Сдвижка кода"
 On:
         CALL    L0FB9
         LD      A,(HL)
@@ -2108,7 +2070,7 @@ OnLoop:
 
 ;You can therefore get away with stupid operators such as '>>>>>' (value 1, the same as a single '>') and '>=<' (value 7), the latter being particularly dense as it causes the condition to always evaluate to true.
 
-	ORG	0778h
+	CHK	0778h, "Сдвижка кода"
 If:
         CALL    EvalExpression
         LD      A,(HL)
@@ -2139,7 +2101,7 @@ NoThen:
 PrintLoop:
 	RST     NextChar
 
-	ORG	0791H
+	CHK	0791H, "Сдвижка кода"
 Print:
         JP      Z,NewLine
 L0794:  RET     Z
@@ -2262,7 +2224,7 @@ L0840:  LD      A,(INPUT_OR_READ)
         LD      HL,(PROG_PTR_TEMP)
         RET     
 
-	ORG	0852h
+	CHK	0852h, "Сдвижка кода"
 Input:
         CP      22H
         LD      A,00H
@@ -2286,31 +2248,41 @@ L0866:  PUSH    HL
         PUSH    BC
         JP      ReadParse
 
-	ORG	0879h
+	CHK	0879h, "Сдвижка кода"
 Read:
         PUSH    HL
         LD      HL,(DATA_PROG_PTR)
-        DB	0f6h		;OR      0AFH
+        DB	0f6h		; OR 0AFH
 ReadParse:
-	XOR	A
+	XOR	A		; 0AFH
         LD      (INPUT_OR_READ),A
+;Preserve data prog ptr on stack and restore prog ptr to HL. This should point to the name of the variable to read data into. Note we also LXI over the syntax check for a comma that's done on subsequent reads.
         EX      (SP),HL
         DB	01h		; LD      BC,...
 ReadNext:
 	RST	SyntaxCheck
 	DB	','
+;Get variable value address in DE.
         CALL    GetVar
+;Preserve prog ptr and get data prog ptr into HL.
         EX      (SP),HL
+;Preserve variable value address on stack.
         PUSH    DE
+;Get byte of data part of program. If this is a comma seperator then we've found our data item and can jump ahead to GotDataItem
         LD      A,(HL)
         CP	','
         JP      Z,GotDataItem
+
         LD      A,(INPUT_OR_READ)
+;If the next byte of data is not a null byte terminating the line then syntax error out.
         OR      A
         JP      NZ,ReadError
+;We've been called by the INPUT handler, and we have more inputs to take - the interpreter allows 'INPUT A,B,C' -type statement. So here we get the next input, only Bill has made a mistake here - he prints an unnecessary '?' , so the user gets two question marks for all inputs after the first one.
         LD      A, '?'
         RST     OutChar
         CALL    InputLineWithQ
+
+;Restore variable address, advance the data ptr so it points to the start of the next data item, and assign the data item to the variable. 
 GotDataItem:
 	LD      A,(0219H)
         OR      A
@@ -2343,6 +2315,7 @@ L08D1:  EX      (SP),HL
         DEC     HL
         RST     NextChar
         JP      NZ,0884h
+;
         POP     DE
         LD      A,(INPUT_OR_READ)
         OR      A
@@ -2384,7 +2357,7 @@ L0914:  RST     NextChar
 ;Next
 ;The NEXT keyword is followed by the name of the FOR variable, so firstly we get the address of that variable into DE.
 
-	ORG	091Dh
+	CHK	091Dh, "Сдвижка кода"
 Next:
         LD      DE,0000H
 L0920:  CALL    NZ,GetVar
@@ -2634,11 +2607,11 @@ L0A6D:  LD      BC,0043H
         JP      (HL)
 
 
-	ORG	0A76h
+	CHK	0A76h, "Сдвижка кода"
 FOr:
 	DB	0F6h	;OR 0AFH
 
-	ORG	0A77h
+	CHK	0A77h, "Сдвижка кода"
 FAnd:
 	XOR	A	; AFh
         PUSH    AF
@@ -2763,7 +2736,7 @@ DimContd:
         RST     SyntaxCheck
         DB	','
 
-	ORG	0B15H
+	CHK	0B15H, "Сдвижка кода"
 Dim:
         LD      BC,DimContd
         PUSH    BC
@@ -2992,7 +2965,7 @@ L0C74:  LD      HL,(PROG_PTR_TEMP2)
         RST     NextChar
         RET     
 
-	ORG	0C7Ah
+	CHK	0C7Ah, "Сдвижка кода"
 Fre:
         LD      HL,(VAR_TOP)
         EX      DE,HL
@@ -3019,14 +2992,14 @@ L0C9C:  LD      D,B
         LD      B,90H
         JP      L12DA
 
-	ORG	0CA8h
+	CHK	0CA8h, "Сдвижка кода"
 Pos:
         LD      A,(TERMINAL_X)
 L0CAB:  LD      B,A
         XOR     A
         JP      L0C9C
 	
-	ORG	0CB0h
+	CHK	0CB0h, "Сдвижка кода"
 Def:
         CALL    L0D10
         LD      BC,FindNextStatement
@@ -3104,7 +3077,7 @@ L0D10:  RST     SyntaxCheck
         CALL    L0B1F
         JP      L0969
 	
-	ORG	0d1fh
+	CHK	0d1fh, "Сдвижка кода"
 Str:
         CALL    L0969
         CALL    FOut
@@ -3405,7 +3378,7 @@ L0EC5:  LD      HL,(021DH)
 L0EE5:  POP     HL
         RET     
 
-	ORG	0EE7h
+	CHK	0EE7h, "Сдвижка кода"
 Len:
         LD      BC,L0CAB
         PUSH    BC
@@ -3417,7 +3390,7 @@ L0EEB:  CALL    L0EBE
         OR      A
         RET     
 
-	ORG	0ef6h
+	CHK	0ef6h, "Сдвижка кода"
 Asc:
         CALL    L0EEB
         JP      Z,FunctionCallError
@@ -3428,7 +3401,7 @@ Asc:
         LD      A,(HL)
         JP      L0CAB
 	
-	ORG	0f04h
+	CHK	0f04h, "Сдвижка кода"
 Chr:
         LD      A,01H
         CALL    L0D43
@@ -3438,7 +3411,7 @@ Chr:
         POP     BC
         JP      L0D75
 
-	ORG	0f14h
+	CHK	0f14h, "Сдвижка кода"
 Left:
         CALL    L0F9F
         XOR     A
@@ -3472,7 +3445,7 @@ L0F18:  EX      (SP),HL
         CALL    L0EC5
         JP      L0D75
 	
-	ORG	0f44h
+	CHK	0f44h, "Сдвижка кода"
 Right:
         CALL    L0F9F
         POP     DE
@@ -3481,7 +3454,7 @@ Right:
         SUB     B
         JP      L0F18
 
-	ORG	0f4eh
+	CHK	0f4eh, "Сдвижка кода"
 Mid:
         EX      DE,HL
         LD      A,(HL)
@@ -3514,14 +3487,14 @@ L0F60:  RST     SyntaxCheck
         LD      B,E
         RET     
 
-	ORG	0f75h
+	CHK	0f75h, "Сдвижка кода"
 Inp:
         CALL    L0FBC
         LD      (0F7CH),A
         IN      A,(00H)
         JP      L0CAB
 
-	ORG	0F80h
+	CHK	0F80h, "Сдвижка кода"
 Out:
         CALL    L0FAC
         OUT     (00H),A
@@ -3572,7 +3545,7 @@ L0FBC:  CALL    L0645
         LD      A,E
         RET     
 
-	ORG	0Fc8H
+	CHK	0Fc8H, "Сдвижка кода"
 Val:
         CALL    L0EEB
         JP      Z,FZero
@@ -3595,7 +3568,7 @@ Val:
         RET     
 
 ; Подпрогрмамма ввода с READER. В нашем случае - с магнитофона
-	ORG	0FE1H
+	CHK	0FE1H, "Сдвижка кода"
 Reader:
 	CALL    0F806h
         NOP     
@@ -3785,7 +3758,7 @@ FSubFromMem:
 	CALL    FLoadBCDEfromMem
         DB	21h			;LD      HL,...
 	
-	ORG	107dh
+	CHK	107dh, "Сдвижка кода"
 ;2.2 Addition & Subtraction
 ;blah
 FSub:
@@ -4021,7 +3994,7 @@ L115F:  RRA
         LD      B,L
         XOR     D
         db	38h, 82h
-	ORG	117eh
+	CHK	117eh, "Сдвижка кода"
 Log:
 L117E:  RST     FTestSign
         JP      PE,FunctionCallError
@@ -4083,7 +4056,7 @@ L11B3:  LD      BC,8031H
 ;}
 ;
 ;(fixme: Show why this works)
-	ORG	11BAh
+	CHK	11BAh, "Сдвижка кода"
 FMul:
 	POP	BC
 	POP	DE
@@ -4157,7 +4130,7 @@ FDivByTen:
         LD      DE,0000H
         CALL    FLoadFromBCDE
 	
-	ORG	1218H
+	CHK	1218H, "Сдвижка кода"
 FDiv:
 L1218:  POP     BC
         POP     DE
@@ -4296,7 +4269,7 @@ FMulByTen:
 
 ;FTestSign_tail
 ;When FACCUM is non-zero, RST FTestSign jumps here to get the sign as an integer : 0x01 for positive, 0xFF for negative.
-	ORG	12cah
+	CHK	12cah, "Сдвижка кода"
 
 FTestSign_tail:
 	LD	A,(FACCUM+2)
@@ -4325,7 +4298,7 @@ L12D0:  SBC     A,A
 ;Returns an integer that indicates FACCUM's sign. We do this by a simple call to FTestSign which gets the answer in A, then fall into FCharToFloat to get that answer back into FACCUM.
 ;
 ;Get FACCUM's sign in A. A will be 0x01 for positive, 0 for zero, and 0xFF for negative.
-	ORG	12D4H
+	CHK	12D4H, "Сдвижка кода"
 
 Sgn:	RST     FTestSign
 
@@ -4348,7 +4321,7 @@ L12DA:  LD      HL,FACCUM+3
 ;FACCUM = |FACCUM|.
 ;
 ;Return if FACCUM is already positive, otherwise fall into FNegate to make it positive.
-	ORG	12e8h
+	CHK	12e8h, "Сдвижка кода"
 Abs:
         RST     FTestSign
         RET     P
@@ -4563,7 +4536,7 @@ FMantissaDec:
 
 ;If FACCUM's exponent is >= 2^24, then it's too big to hold any fractional part - it is already an integer, so we just return.
 
-	ORG	1392h
+	CHK	1392h, "Сдвижка кода"
 Int:
 	LD      HL,FACCUM+3
         LD      A,(HL)
@@ -4723,7 +4696,7 @@ AddDigit:
 	CALL    FPush
         CALL    FCharToFloat
 	
-	ORG	144ch
+	CHK	144ch, "Сдвижка кода"
 FAdd:
         POP     BC
         POP     DE
@@ -4909,13 +4882,13 @@ L154F:  LD      HL,FNegate
         EX      (SP),HL
         JP      (HL)
 	
-	ORG	1554h
+	CHK	1554h, "Сдвижка кода"
 Sqr:
         CALL    FPush
         LD      HL,1539H
         CALL    FLoadFromMem
 
-	ORG	155dh
+	CHK	155dh, "Сдвижка кода"
 FPower:
         POP     BC
         POP     DE
@@ -4953,7 +4926,7 @@ L1581:  POP     HL
         POP     DE
         CALL    FMul2
 	
-	ORG	1599h
+	CHK	1599h, "Сдвижка кода"
 Exp:
 L1599:  CALL    FPush
         LD      BC,8138H
@@ -5011,7 +4984,7 @@ L1599:  CALL    FPush
         NOP     
         NOP     
         ADD     A,C
-	ORG	15fah
+	CHK	15fah, "Сдвижка кода"
 L15FA:  CALL    FPush
         LD      DE,11BAH
         PUSH    DE
@@ -5045,7 +5018,7 @@ L1612:	POP	AF
 ;Rnd
 ;Generates a random number. This is a bit odd... like all inline functions it takes a numeric argument, but in RNDs case this argument is mostly ignored. If it's a negative number it skips a couple of stages of reseeding RND_SEED.
 
-	ORG	162ah
+	CHK	162ah, "Сдвижка кода"
 Rnd:
 ;If tghe argument in FACCUM is negative, then skip over the
 	RST     FTestSign
@@ -5085,11 +5058,11 @@ RND_SEED:
         LD      C,A
         ADD     A,B
 	
-	ORG	1660H
+	CHK	1660H, "Сдвижка кода"
 Cos:
 	LD      HL,16A6H
         CALL    FAddFromMem
-	ORG	1666h
+	CHK	1666h, "Сдвижка кода"
 
 ;Divide x (in FACCUM) by 2p to get u. 
 
@@ -5151,7 +5124,7 @@ NegateIfPositive:
         JP      C,490Fh
         ADD     A,E
 
-	ORG	16c3h	
+	CHK	16c3h, "Сдвижка кода"
 Tan:
         CALL    FPush
         CALL    Sin
@@ -5163,7 +5136,7 @@ Tan:
         CALL    Cos
         JP      L1218
 
-	ORG	16D8h
+	CHK	16D8h, "Сдвижка кода"
 Atn:
         RST     FTestSign
         CALL    M,L154F
@@ -5218,21 +5191,21 @@ L16F3:  LD      HL,16FDH
         NOP     
         NOP     
 	
-	ORG	1724h
+	CHK	1724h, "Сдвижка кода"
 Peek:	
         RST     FTestSign
         CALL    L0649
         LD      A,(DE)
         JP      L0CAB
 	
-	ORG	172CH
+	CHK	172CH, "Сдвижка кода"
 Poke:
         CALL    L0966
         RST     FTestSign
         CALL    L0649
         JP      L1067
 	
-	ORG	1736h
+	CHK	1736h, "Сдвижка кода"
 Usr:
         RST     FTestSign
         CALL    L0649
@@ -5271,7 +5244,7 @@ InitLoop:
 szHello:		DB		1Fh, 0Dh, 0Ah, "*MikrO/80* BASIC", 0	;2Ah, 4Dh, 69h, 6Bh, 72h, 4Fh, 2Fh
 ;			DB		38h, 30h, 2Ah, 20h, 42h, 41h, 53h, 49h, 43h, 00h
 
-	ORG	176ah
+	CHK	176ah, "Сдвижка кода"
 Cur:
 	CALL    L0FB9
         LD      (1957H),A
@@ -5308,7 +5281,7 @@ L17A1:  LD      D,00H
         POP     HL
         RET     
 
-	ORG	17B3H
+	CHK	17B3H, "Сдвижка кода"
 Cls:
         PUSH    HL
         LD      HL,0E800H
@@ -5324,7 +5297,7 @@ L17BA:  XOR     A
         POP     HL
         RET     
 
-	ORG	17C7H
+	CHK	17C7H, "Сдвижка кода"
 Plot:
         CALL    L0FB9
         LD      (1954H),A
@@ -5401,7 +5374,7 @@ L183F:  LD      (HL),A
 L1845:  POP     HL
         RET     
 
-	ORG	1847h
+	CHK	1847h, "Сдвижка кода"
 Line:
         CALL    L0FB9
         LD      (1952H),A
@@ -5492,7 +5465,7 @@ L18E4:  PUSH    BC
         POP     BC
         JP      L18AD
 
-	ORG	18EEh
+	CHK	18EEh, "Сдвижка кода"
 Msave:
         PUSH    HL
         LD      L,00H
@@ -5507,7 +5480,7 @@ L18F2:  CALL    Puncher
         LD      A,0D3H
         JP      L0FFD
 
-	ORG	1905H
+	CHK	1905H, "Сдвижка кода"
 Mload:
         LD      (FACCUM),A
         CALL    New2
@@ -5655,7 +5628,7 @@ L1938:  LD      A,08H
         NOP     
         NOP     
         NOP     
-	ORG	19c0h
+	CHK	19c0h, "Сдвижка кода"
 	DB 72h, 61h, 7Ah, 72h, 61h, 62h, 6Fh, 74h,  41h, 4Eh, 4Fh, 20h, 44h, 4Ch, 71h, 20h	; "РАЗРАБОТANO DLЯ "
 	DB 76h, 75h, 72h, 6Eh, 61h, 6Ch, 61h, 20h,  72h, 61h, 64h, 69h, 6Fh, 20h, 60h, 6Fh	; "ЖУРНАЛА РАДИО МО"
 	DB 73h, 6Bh, 77h, 61h, 20h, 31h, 39h, 38h,  34h, 20h, 67h, 6Fh, 64h, 22h		; "СКВА 1984 ГОД""
