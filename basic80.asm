@@ -5,17 +5,17 @@
 ; По ходу разбора встречаются мысли и хотелки
 ;
 ; Общие хотелки:
-; !?Добавить OPTION NOLET для управления наличием/отсутствием LET
+; !?Добавить OPTION NOLET для управления наличием/отсутствием LET (по идее, можно при парсинге кода просто игнорить)
 ; !?Добавить OPTION NOEND для управления наличием/отсутствием END
 ; !!Добавить поддержку каналов и потоков, как в Sinclair Basic, не забывая совместимость с ECMA стандартом
 ; !!Добавить поддержку дисковых операций через CP/M (с учетом, что под Микро-80 она существует) (ЗЫ: Базироваться на CP/M Бейсике не хочу)
 ; !!Отвязаться от RST и пересобрать с адреса 100h. Вначале добавить CP/M адаптер. При наличии поддержки дисковых фунок - адаптер не цепляем.
 ; !!Добавить OPTION BASE для управления индеском массива (Совместимость ANSI)
 ; !!Автонастройка памяти (сейчас жестко задано в коде)
-; !!GO TO=GOTO, GO SUB=GOSUB
+; !!GO TO=GOTO, GO SUB=GOSUB (учесть в токенизаторе)
 ; ??ГОСТ расширение основных средств уровень 1 и 2 не могут быть реализованы из-за усеченного знакогенератора. Нет строчных букв.
 ; !!Развернутые сообщения об ошибках
-; !!Отвязать по максимуму от работы в ОЗУ (версия для ROM-диска?)
+; !!Отвязать по максимуму от работы в ОЗУ (версия для ROM-диска? Мысль интересная, т.к можно высвободить гору ОЗУ. Больше актуально не для М-80)
 ;
 ; БЕЙСИК для МИКРО-80 - Общее устройство
 ;
@@ -285,15 +285,15 @@ SyntaxCheck:
 
 ;NextChar (RST 2)
 ;
-;Возвращает следующий введенный символ из буфера по адресу HL, skipping over space characters. 
-;The Carry flag is set if the returned character is not alphanumeric,
+; Возвращает следующий введенный символ из буфера по адресу HL, пропуская символы пробелов.
+; The Carry flag is set if the returned character is not alphanumeric,
 ; also the zero flag is set if a null character has been reached.
 
 NextChar:
 	INC	HL
 	LD	A,(HL)
-	CP	3AH
-	RET	NC
+	CP	':'			; 3AH
+	RET	NC			; End of statement or bigger
 	JP	NextChar_tail
 
 ;OutChar (RST 3)
@@ -305,8 +305,8 @@ OutChar:
 	OR	A
 	JP	OutChar_tail
 
-;CompareHLDE (RST 4)
-;Compares HL and DE with same logical results (C and Z flags) as for standard eight-bit compares.
+; CompareHLDE (RST 4)
+; Сравниает HL и DE с таким же логическим результатом (флаги C и Z), что и стандартное 8-мибитное сравнение.
 
 CompareHLDE:
 	LD	A,H
@@ -316,8 +316,8 @@ CompareHLDE:
 	SUB	E
 	RET
 ;
-;TERMINAL_X and TERMINAL_Y
-;Variables controlling the current X and Y positions of terminal output
+; TERMINAL_X and TERMINAL_Y
+; Variables controlling the current X and Y positions of terminal output
 
 TERMINAL_Y:	DB		01
 TERMINAL_X:	DB		00
@@ -362,9 +362,9 @@ RST6RET:
 ;
 ; There are three groups of keywords :
 ;
-; General keywords. These typically start a statement; examples are LET, PRINT, GOTO and so on.
-; Supplementary keywords. Used in statements but not as part of an expression, eg TO, STEP, TAB
-; Inline keywords. Only used in expressions, eg, SIN, RND, INT.
+; Основные ключевые слова. These typically start a statement; examples are LET, PRINT, GOTO and so on.
+; Вспомогательные слова. Used in statements but not as part of an expression, eg TO, STEP, TAB
+; Функции. Only used in expressions, eg, SIN, RND, INT.
 ; 
 ;
 ; KW_INLINE_FNS
@@ -372,30 +372,30 @@ RST6RET:
 ;
 
 KW_INLINE_FNS:
-	DW	Sgn	;12D4
-	DW	Int	;1392
-	DW	Abs	;12E8
-	DW	Usr	;1736
-	DW	Fre	;0C7A
-	DW	Inp	;0F75
-	DW	Pos	;0CA8
-	DW	Sqr	;1554
-	DW	Rnd	;162A
-	DW	Log	;117E
-	DW	Exp	;1599
-	DW	Cos	;1660
-	DW	Sin	;1666
-	DW	Tan	;16C3
-	DW	Atn	;16D8
-	DW	Peek	;1724
-	DW	Len	;0EE7
-	DW	Str	;0D1F
-	DW	Val	;0FC8
-	DW	Asc	;0EF6
-	DW	Chr	;0F04
-	DW	Left	;0F14
-	DW	Right	;0F44
-	DW	Mid	;0F4E
+	DW	Sgn
+	DW	Int
+	DW	Abs
+	DW	Usr
+	DW	Fre
+	DW	Inp
+	DW	Pos
+	DW	Sqr
+	DW	Rnd
+	DW	Log
+	DW	Exp
+	DW	Cos
+	DW	Sin
+	DW	Tan
+	DW	Atn
+	DW	Peek
+	DW	Len
+	DW	Str
+	DW	Val
+	DW	Asc
+	DW	Chr
+	DW	Left
+	DW	Right
+	DW	Mid
 
 ; KW_ARITH_OP_FNS
 ;
@@ -634,35 +634,35 @@ TKCOUNT	EQU	Q-80H
 	CHK	0170H, "Сдвижка кода"
 	
 KW_GENERAL_FNS:
-	DW	Cls		;	END		17B3
-	DW	For		;	FOR             0535
-	DW	Next		;	NEXT            091D
-	DW	Data		;	DATA            06F9
-	DW	Input		;	INPUT           0852
-	DW	Dim		;	DIM             0B15
-	DW	Read		;	READ            0879
-	DW	Cur		;	LET             176A
-	DW	Goto		;	GOTO            06C7
-	DW	Run		;	RUN             06AB
-	DW	If		;	IF              0778
-	DW	Restore		;	RESTORE         05DB
-	DW	Gosub		;	GOSUB           06B7
-	DW	Return		;	RETURN          06E3
-	DW	Rem		;	REM             06FB
-	DW	Stop		;	STOP            05EF
-	DW	Out		;	PRINT           0F80
-	DW	On		;	LIST            075C
-	DW	Plot		;	CLEAR           17C7
-	DW	Line		;	NEW             1847
-	DW	Poke		;			172C
-	DW	Print		;			0791
-	DW	Def		;			0CB0
-	DW	Cont		;			0617
-	DW	List		;			04EE
-	DW	Clear		;			0682
-	DW	Mload		;			1905
-	DW	Msave		;			18EE
-	DW	New		;			039D
+	DW	Cls		;	END
+	DW	For		;	FOR
+	DW	Next		;	NEXT
+	DW	Data		;	DATA
+	DW	Input		;	INPUT
+	DW	Dim		;	DIM
+	DW	Read		;	READ
+	DW	Cur		;	LET
+	DW	Goto		;	GOTO
+	DW	Run		;	RUN
+	DW	If		;	IF
+	DW	Restore		;	RESTORE
+	DW	Gosub		;	GOSUB
+	DW	Return		;	RETURN
+	DW	Rem		;	REM
+	DW	Stop		;	STOP
+	DW	Out		;	PRINT
+	DW	On		;	LIST
+	DW	Plot		;	CLEAR
+	DW	Line		;	NEW
+	DW	Poke		;
+	DW	Print		;
+	DW	Def		;
+	DW	Cont		;
+	DW	List		;
+	DW	Clear		;
+	DW	Mload		;
+	DW	Msave		;
+	DW	New		;
 	IF	OPTION
 	DW	Option
 	ENDIF
@@ -1626,90 +1626,120 @@ EndOfForHandler:
         INC     SP
 
 ;		
-;1.9 Execution
-;ExecNext
-;Having exec'd one statement, this block moves on to the next statement 
-;in the line or the next line if there are no more statements on the current line.
+; 1.9 Исполнение
+;
+; ExecNext
+;
+; После исполнения одной команды, этот блок осуществляет переход к следующей команде
+; в текущей строке или на следующей строке. Если больше команд не найденр, то завершаем
+; исполнение программы.
 ;
 
 ExecNext:
+; Даем пользователю шанс прервать исполнение.
 	CALL    0F812h			;---------------
-        NOP				; !! Этот блок можно заменить одним вызовом
+        NOP				; !! Этот блок можно заменить одним вызовом CALL TestBreakKey
         CALL    NZ,CheckBreak		;---------------
+; Если у нас ':', являющийся разделителем команд (что позволяет иметь несколько команд в строке), то исполняем следующую команду.
         LD      (PROG_PTR_TEMP),HL
         LD      A,(HL)
         CP      ':'
         JP      Z,Exec
+; Если это не ':', то должен быть нулевой байт, завершающий строку. В противном случае у нас синтаксическая ошибка.
         OR      A
-        JP      NZ,SyntaxError
+        JP      NZ, SyntaxError
+; Следующие два байта должны содержать адрес следующей строки. Можно просто их проигнорировать,
+; т.к. строки в памяти идут подряд, но мы должны завершить программу, если дошли до ее конца.
         INC     HL
         LD      A,(HL)
         INC     HL
         OR      (HL)
         INC     HL
-        JP      Z,EndOfProgram
+        JP      Z, EndOfProgram
+; Получаем номер следующей строки, кохраняем ее в CURRENT_LINE и переходим к Exec для ее исполнения.
         LD      E,(HL)
         INC     HL
         LD      D,(HL)
         EX      DE,HL
         LD      (CURRENT_LINE),HL
         EX      DE,HL
-		
-;Exec
-;Executes a statement of BASIC code pointed to by HL.
 
+;		
+; Exec
+;
+; Запуск команды BASIC по адресу в HL.
+;
 		
+; Получаем первый символ команды.
 Exec:	RST     NextChar
+; Сохраняем адрес ExecNext в стеке, чтобы переходить по RET.
         LD      DE,ExecNext
         PUSH    DE
+
 ExecANotZero:
+; Если нет команды, то прекращаем исполнение.
 	RET     Z
 
 ExecA:
+; Все ключевые слова >=0x80. Если это не ключевое слово, то считаем, что LET было не введено и это команда LET.
 	SUB     80H
         JP      C,Let
+; Если это не основное слово, то это синтаксическая ошибка.
         CP      TKCOUNT
         JP      NC,SyntaxError
+; Вычисляем адрес обработчика команды в таблице обработчиков в HL, сохранив текущий указатель программы в DE.
         RLCA    			;	BC = A*2
         LD      C,A
         LD      B,00H
         EX      DE,HL
         LD      HL,KW_GENERAL_FNS
         ADD     HL,BC
+; Считываем в BC адрес обработчика.
         LD      C,(HL)
         INC     HL
         LD      B,(HL)
+; Помещаем адрес обработчика в стек, восстанавливаем указатель программы в HL,
+; получаем следующий символ и переходим по RET в обработчик команды.
         PUSH    BC
         EX      DE,HL
 		
-; Это дублирующий код из RST NextChar
+; 1.10 Продолжение вспомогательных функций
+;
+; NextChar_tail
+;
+
+;
+; Это дублирующий код из RST NextChar. Аналог последовательности RST NextChar ! RET
+; Можно убрать для экономии размера.
+;
 NextChar2:
 	INC     HL
         LD      A,(HL)
         CP      ':'
         RET     NC
 
-
-;1.10 More Utility Functions
-;NextChar_tail
-
 NextChar_tail:
+; Пропускаем пробел.
 	CP      ' '
         JP      Z,NextChar2
+; Если символ >= '0', то устанавливаем флаг переноса.
         CP      '0'
         CCF     
+; Проверяем на ноль, не трогая флаг переноса.
         INC     A
         DEC     A
         RET     
 
-;Restore
-;Resets the data pointer to just before the start of the program.
-
 	CHK	05DBh, "Сдвижка кода"
+
+; Обработчик команды Restore
+; Сбрасываем указатель данных на адрес перед началом программы.
+
 Restore:
 	EX      DE,HL
         LD      HL,(PROGRAM_BASE)
         DEC     HL
+SetDataPtr:
 L05E0:  LD      (DATA_PROG_PTR),HL
         EX      DE,HL
         RET     
@@ -2055,7 +2085,7 @@ OkToken:
 OnLoop:
 	DEC     C
         LD      A,B
-        JP      Z,ExecA
+        JP      Z, ExecA
         CALL    LineNumberFromStr2
         CP      ','
         RET     NZ
@@ -2282,7 +2312,7 @@ ReadNext:
         RST     OutChar
         CALL    InputLineWithQ
 
-;Restore variable address, advance the data ptr so it points to the start of the next data item, and assign the data item to the variable. 
+; Restore variable address, advance the data ptr so it points to the start of the next data item, and assign the data item to the variable. 
 GotDataItem:
 	LD      A,(0219H)
         OR      A
@@ -2320,7 +2350,7 @@ L08D1:  EX      (SP),HL
         LD      A,(INPUT_OR_READ)
         OR      A
         EX      DE,HL
-        JP      NZ,L05E0
+        JP      NZ, SetDataPtr		; L05E0
         OR      (HL)
         LD      HL, szOverflow
         PUSH    DE
@@ -2329,7 +2359,8 @@ L08D1:  EX      (SP),HL
         RET     
 
 szOverflow:
-	DB	3Fh, 6Ch, 69h, 7Bh, 6Eh, 69h, 65h, 20h, 64h, 61h, 6Eh, 6Eh, 79h, 0E5h, 0Dh, 0Ah, 00h	; "?ЛИШНИЕ ДАННЫЕ"
+	DB	"?li{nie dannyе", 0
+;	DB	3Fh, 6Ch, 69h, 7Bh, 6Eh, 69h, 65h, 20h, 64h, 61h, 6Eh, 6Eh, 79h, 0E5h, 0Dh, 0Ah, 00h	; "?ЛИШНИЕ ДАННЫЕ"
 
 ReadError:
 	CALL    FindNextStatement
