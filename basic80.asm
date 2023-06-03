@@ -5067,7 +5067,8 @@ L1647:  CALL    FCopyToBCDE
         LD      A,E
         LD      E,C
         LD      C,A
-;Set FTEMP_SIGN to 0x80 to indicate to FNormalise that it doesn't need to change the sign. Also set FACCUM's exponent to 0 so the result, when normalised, will be less than 1.        LD      (HL),80H
+;Set FTEMP_SIGN to 0x80 to indicate to FNormalise that it doesn't need to change the sign. Also set FACCUM's exponent to 0 so the result, when normalised, will be less than 1.        
+	LD      (HL),80H
         DEC     HL
         LD      B,(HL)
         LD      (HL),80H
