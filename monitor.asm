@@ -1,5 +1,3 @@
-
-
 ;  МОНИТОР МИКРО-80
 ;  ================
 
@@ -8,18 +6,18 @@
 		Z80SYNTAX	EXCLUSIVE
         
 		
-        ORG     0f800H
+        ORG     0F800H
 
 RABADR  EQU     0F800H
 
-EK_ADR  EQU     0F75AH
-YF765   EQU     0F765H
-STACK   EQU     0F7FFH
-COMBUF  EQU     0F77BH
 P_JMP   EQU     0F750H          ; здесь JMP по G
 PAR_HL  EQU     0F751H
 PAR_DE  EQU     0F753H
 PAR_BC  EQU     0F755H
+EK_ADR  EQU     0F75AH
+YF765   EQU     0F765H
+COMBUF  EQU     0F77BH
+STACK   EQU     0F7FFH
 
 ; ----------------------------------------------
 

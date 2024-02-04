@@ -9,40 +9,57 @@
 ;
 ; ===========================================================================
 
-		.org 0F000h
-word_F000:	.block 75Ah
-CursorAddress:	.block 2
-TapeReadConst:	.block 1		
-TapeWriteConst:	.block 1		
-CursorVisible:	.block 1		; Show / Hide cursor ESC sequence $1B +	$61; $1B + $62
-EscSequenceState:.block	1
-LastKeyStatus:	.block 2		; H - last key pressed,	L - autorepeat delay counter
-RST6_VAR3:	.block 2		
-RST6_VAR1:	.block 2		
-		.block 4
-F7FE_storedHere:.block 2		; $F7FE	is stored here
-RST6_VAR2:	.block 2		
-		.block 3
-RST6_RUN_Var1:	.block 2		
-RST6_RUN_Var2:	.block 1	
-JMPcommand:	.block 1		
+;P_JMP   EQU     0F750H          ; здесь JMP по G
+;PAR_HL  EQU     0F751H
+;PAR_DE  EQU     0F753H
+;PAR_BC  EQU     0F755H
+;EK_ADR  EQU     0F75AH
+;YF765   EQU     0F765H
+;COMBUF  EQU     0F77BH
+;STACK   EQU     0F7FFH
+                CPU	8080
+
+DefaultRdWrConst	EQU	03854H
+ScreenHeight		EQU	20H
+ScreenWidth		EQU	40H
+SymbolBufEndHI		EQU	0F0H
+CursorBufferStart	EQU	0E000H
+SymbolBufferStart	EQU	0E800H
+
+		ORG 0F000h
+word_F000:	DS 75Ah
+CursorAddress:	DS 2
+TapeReadConst:	DS 1		
+TapeWriteConst:	DS 1		
+CursorVisible:	DS 1		; Show / Hide cursor ESC sequence $1B +	$61; $1B + $62
+EscSequenceState: DS	1
+LastKeyStatus:	DS 2		; H - last key pressed,	L - autorepeat delay counter
+RST6_VAR3:	DS 2		
+RST6_VAR1:	DS 2		
+		DS 4
+F7FE_storedHere:DS 2		; $F7FE	is stored here
+RST6_VAR2:	DS 2		
+		DS 3
+RST6_RUN_Var1:	DS 2		
+RST6_RUN_Var2:	DS 1	
+JMPcommand:	DS 1		
 					; $C3  "JMP" command is stored here
-JMPaddress:	.block 2		
-word_F777:	.block 2
-word_F779:	.block 2
-byte_F77B:	.block 1		
-TapeReadVAR:	.block 1
-HookActive:	.block 1		; is not 0 if hook routine is active
-HookJmp:	.block 1		
+JMPaddress:	DS 2		
+word_F777:	DS 2
+word_F779:	DS 2
+byte_F77B:	DS 1		
+TapeReadVAR:	DS 1
+HookActive:	DS 1		; is not 0 if hook routine is active
+HookJmp:	DS 1		
 					; Monitor writes here ;C3 = "JMP" instruction
-HookAddress:	.block 2		
-FreeMemAddr:	.block 2
-CmdLineBuffer:	.block 7Ch		
+HookAddress:	DS 2		
+FreeMemAddr:	DS 2
+CmdLineBuffer:	DS 7Ch		
 
 ; ===========================================================================
 
 ; Segment type:	Pure code
-		.org 0F800h
+		ORG 0F800h
 		jmp	ColdReset
 
 		jmp	InputSymbol
@@ -75,7 +92,7 @@ CmdLineBuffer:	.block 7Ch
 
 		ret			; Init display refresh (dummy)
 
-		.dw 0
+		DW  0
 		jmp	GetFreeMemAddr
 
 		jmp	SetFreeMemAddr
@@ -217,7 +234,7 @@ ProcessDirective:
 
 
 ProcessBackspace:			
-		mvi	a, LO(CmdLineBuffer)
+		mvi	a, CmdLineBuffer & 0FFH
 		cmp	l
 		jz	GotoCmdLineBegin ; already at the command line beginning
 
@@ -1443,7 +1460,7 @@ DoCursorRight:
 CheckVertBoundary:			
 		mov	a, h
 		ani	7
-		ori	HI(SymbolBufferStart)
+		ori	(SymbolBufferStart & 0FF00H) >> 8
 		mov	h, a
 		jmp	UpdCurPosAndReturn
 
@@ -1721,44 +1738,44 @@ GenerateEscCode:
 
 ; End of function ReadKeyCode
 
-ESCcodesMap:	.db  20h		
-		.db  18h
-		.db    8
-		.db  19h
-		.db  1Ah
-		.db  0Dh
-		.db  1Fh
-		.db  0Ch
-DirectivePrompt:.db 0Dh, 0Ah		
-		.text "-->"
-		.db 0
-NextLineAndTabStr:.db 0Dh, 0Ah,	18h, 18h, 18h, 0 
-RegistersListStr:.db 0Dh, 0Ah		
-		.text "PC-"
-		.db 0Dh, 0Ah
-		.text "HL-"
-		.db 0Dh, 0Ah
-		.text "BC-"
-		.db 0Dh, 0Ah
-		.text "DE-"
-		.db 0Dh, 0Ah
-		.text "SP-"
-		.db 0Dh, 0Ah
-		.text "AF-"
-		.db 19h, 19h, 19h, 19h,	19h, 19h, 0
-BackspaceStr:	.db 8			
-		.text " "
-		.db 8, 0
-WelcomeMsg:	.db 1Fh, 0Ah		
-		.text "m/80k "
-		.db 0
-DummyHook:	.db 0C9h		
+ESCcodesMap:	db  20h		
+		db  18h
+		db    8
+		db  19h
+		db  1Ah
+		db  0Dh
+		db  1Fh
+		db  0Ch
+DirectivePrompt:db 0Dh, 0Ah		
+		db "-->"
+		db 0
+NextLineAndTabStr:db 0Dh, 0Ah,	18h, 18h, 18h, 0 
+RegistersListStr:db 0Dh, 0Ah		
+		db "PC-"
+		db 0Dh, 0Ah
+		db "HL-"
+		db 0Dh, 0Ah
+		db "BC-"
+		db 0Dh, 0Ah
+		db "DE-"
+		db 0Dh, 0Ah
+		db "SP-"
+		db 0Dh, 0Ah
+		db "AF-"
+		db 19h, 19h, 19h, 19h,	19h, 19h, 0
+BackspaceStr:	db 8			
+		db " "
+		db 8, 0
+WelcomeMsg:	db 1Fh, 0Ah		
+		db "m/80k "
+		db 0
+DummyHook:	db 0C9h		
 					; CPU instruction "RET"  - dummy PrintChar hook
-		.db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
-		.db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
-		.db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
-		.db 0FFh,0FFh,0FFh,0FFh
+		db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+		db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+		db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+		db 0FFh,0FFh,0FFh,0FFh
 ; end of 'ROM'
 
 
-		.end
+		;.end
