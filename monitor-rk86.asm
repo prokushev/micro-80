@@ -19,6 +19,8 @@
 ;STACK   EQU     0F7FFH
                 CPU	8080
 
+FixInitBug		EQU	TRUE
+
 DefaultRdWrConst	EQU	03854H
 ScreenHeight		EQU	20H
 ScreenWidth		EQU	40H
@@ -101,9 +103,11 @@ CmdLineBuffer:	DS 7Ch
 ColdReset:				
 		lxi	sp, 0F800h	; init stack pointer
 
+		if ~~FixInitBug
 		; Welcome message block	  -----> ! move	after Clear Area block
 		lxi	h, WelcomeMsg	; "\x1F\nm/80k "
 		call	PrintString
+		endif
 
 		; Clear	area $F75D..$F7A2
 		lxi	h, 0F75Dh
@@ -113,9 +117,12 @@ ColdReset:
 
 		mvi	a, 0C3h		; CPU instruction "JMP"
 		sta	HookJmp
+
+		if FixInitBug
+		lxi	h, WelcomeMsg	; "\x1F\nm/80k "
+		call	PrintString
+		endif
 ;
-;
-;  ----> ! Move	HERE Welcome Message block !
 ;
 		; Find RAM end
 		lxi	h, 0
