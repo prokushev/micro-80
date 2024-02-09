@@ -1,15 +1,20 @@
 @echo off
 
-asw -lU monitor.asm > monitor.lst
-p2bin monitor.p monitor.bin
+SET PATH=tools;%PATH%
 
-asw -lU monitor-rk86.asm > monitor-rk86.lst
-p2bin monitor-rk86.p monitor-rk86.bin
+echo MONITOR
+asw -q -lU src\monitor\monitor.asm > monitor.lst
+p2bin src\monitor\monitor.p monitor.bin
+
+echo MONITOR RADIO-86RK
+asw -lU src\m80k\monitor-rk86.asm > monitor-rk86.lst
+p2bin src\m80k\monitor-rk86.p monitor-rk86.bin
 
 echo ROMCTRL
 cd src\romctrl
 call make
 cd ..\..
 
+echo ROM-disk
 asw -lU -i src\romctrl\roms romdisk.asm > romdisk.lst
 p2bin romdisk.p romdisk.bin

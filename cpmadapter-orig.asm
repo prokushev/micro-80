@@ -1,4 +1,6 @@
-			CPU	Z80
+			CPU	8080
+			Z80SYNTAX EXCLUSIVE
+
 			ORG	00000H
 
 STACK			EQU	3600H
@@ -185,38 +187,3 @@ LP:
 						
 			;JP	0100H			; Уходим на  начало программы
 
-
-
-			if 0
-Может быть потом...
-			RET				; LIST Printer output
-			NOP
-			NOP
-			JP	0F80CH			; PUNCH Paper tape punch output
-			JP	0F806H			; READER Paper tape reader input
-			RET				; HOME	;21: Move disc head to track 0
-			NOP
-			NOP
-			RET				; SELDSK	;24: Select disc drive
-			NOP
-			NOP
-			RET				; SETTRK	;27: Set track number
-			NOP
-			NOP
-			RET				; SETSEC	;30: Set sector number
-			NOP
-			NOP
-			RET				; SETDMA	;33: Set DMA address
-			NOP
-			NOP
-			RET				; READ	;36: Read a sector
-			NOP
-			NOP
-			RET				; WRITE	;39: Write a sector
-			NOP
-			NOP
-			RET				; LISTST Status of list device
-			NOP
-			NOP
-			RET				; SECTRAN	;45: Sector translation for skewing				
-			endif
