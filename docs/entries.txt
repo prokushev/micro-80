@@ -32,3 +32,74 @@
 - Не поддерживается
 * Перехватывается
 1 Повторяет точку входа 0F809H
+
+
+
+Заметки о МОНИТОРах
+
+Абсолютно ясно, что МОНИТОРы советских компьютров честным образом "скоммунизжены" с иностранного
+прототипа. Логично предположить, что это были МОНИТОРы от Intel. С учетом наличия в сети достаточного
+количества информации было сделано достаточно поверхностное исследование исходных кодов.
+Первое, что искалось, это та же раскладка по памяти. Логично предположить, что дамп был снят как есть,
+а уже потом анализировался. Беглым поиском было найден сходный текст с ORG F800H и знакомой таблицей
+векторов п/п в "INTELLEC SERIES II MICROCOMPUTER DEVELOPMENT SYSTEM, BOOT MONITOR LISTING" document 9800605-02 Rev. B
+
+F800 C3 F851 	        JMP     START0          ; RESET ENTRY POINT
+F803 C3 FBBE 	        JMP     CI              ; LOCAL CONSOLE INPUT
+F806 C3 FC0F 	        JMP     RI              ; READER INPUT
+F809 C3 FC9F 	        JMP     CO              ; LOCAL CONSOLE OUTPUT
+F80C C3 FCE9 	        JMP     PO              ; PUNCH OUTPUT
+F80F C3 FD1E 	        JMP     LO              ; LIST OUTPUT
+F812 C3 FD44 	        JMP     CSTS            ; LOCAL CONSOLE INPUT STATUS
+F815 C3 FD83 	        JMP     IOCHK           ; I/O SYSTEM STATUS
+F818 C3 FD87 	        JMP     IOSET           ; SET I/O CONFIGURATION
+F81B C3 FD8C 	        JMP     MEMCHK          ; COMPUTE SIZE OF MEMORY
+F81E C3 FD94 	        JMP     IODEF           ; DEFINE USER I/O ENTRY POINTS
+F821 C3 FF7F 	        JMP     IOCDR1          ; IOC INPUT
+
+Версия указана как 1.3. В версии 1.1 векторы выглядат так:
+
+F800 C3 F851 	        JMP     START0          ; RESET ENTRY POINT
+F803 C3 FBBE 	        JMP     CI              ; LOCAL CONSOLE INPUT
+F806 C3 FC0F 	        JMP     RI              ; READER INPUT
+F809 C3 FC9B 	        JMP     CO              ; LOCAL CONSOLE OUTPUT
+F80C C3 FCE5 	        JMP     PO              ; PUNCH OUTPUT
+F80F C3 FD1A 	        JMP     LO              ; LIST OUTPUT
+F812 C3 FD40 	        JMP     CSTS            ; LOCAL CONSOLE INPUT STATUS
+F815 C3 FD7F 	        JMP     IOCHK           ; I/O SYSTEM STATUS
+F818 C3 FD83 	        JMP     IOSET           ; SET I/O CONFIGURATION
+F81B C3 FD88 	        JMP     MEMCHK          ; COMPUTE SIZE OF MEMORY
+F81E C3 FD90 	        JMP     IODEF           ; DEFINE USER I/O ENTRY POINTS
+F821 C3 FF7B 	        JMP     IOCDR1          ; IOC INPUT
+ 
+Практически то же самое... Ищем дальше: 
+Поменьше точек входа и стартовый адрес 3800h...
+
+;           INTELLEC8/MOD 80 MONITOR Version 3.0
+;
+	JMP	BEGIN		;RESET ENTRY POINT
+	JMP	CI		;CONSOLE INPUT
+	JMP	RI		;READER INPUT
+	JMP	CO		;CONSOLE OUTPUT
+	JMP	PO		;PUNCH OUTPUT
+	JMP	LO		;LIST OUTPUT
+	JMP	CSTS		;CONSOLE INPUT STATUS
+	JMP	IOCHK		;I/O SYSTEM STATUS
+	JMP	IOSET		;SET I/O CONFIGURATION
+	JMP	MEMCK		;COMPUTE SIZE OF MEMORY
+
+
+Где-то уже поближе к той же таблице МИКРО-80, правда, адрес таблицы векторов не тот совсем:
+
+;        TITLE   "80/10 MONITOR, VERSION 1.1, 1 NOVEMBER 1976"
+
+        JMP     CO      ; BRANCH TABLE FOR USER ACCESSIBLE ROOTINES
+        JMP     CI
+        JMP     RI
+        JMP     PO
+
+
+В итоге, перебрав еще ряд доступных исходных кодов, прямо похожего не нашел.
+Наиболее близкими оказались версии для Intel MDS, но они явно мощнее, чем
+МИКРО-80. Есть поддержка IOByte и т.п., чего на МИКРО-80 даже близко не видно.
+
