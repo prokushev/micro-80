@@ -1,4 +1,3 @@
-
 ; ===========================================================================
 ;
 ;   >>>>       Радио-86РК совместимый монитор для Микро-80           <<<<
@@ -17,1772 +16,1736 @@
 ;YF765   EQU     0F765H
 ;COMBUF  EQU     0F77BH
 ;STACK   EQU     0F7FFH
-                CPU	8080
+	CPU		8080
+		
+		Z80SYNTAX	EXCLUSIVE
 
-FixInitBug		EQU	TRUE
+FixInitBug      EQU TRUE
 
-DefaultRdWrConst	EQU	03854H
-ScreenHeight		EQU	20H
-ScreenWidth		EQU	40H
-SymbolBufEndHI		EQU	0F0H
-CursorBufferStart	EQU	0E000H
-SymbolBufferStart	EQU	0E800H
+DefaultRdWrConst    EQU 03854H
+ScreenHeight        EQU 20H
+ScreenWidth         EQU 40H
+SymbolBufEndHI      EQU 0F0H
+CursorBufferStart   EQU 0E000H
+SymbolBufferStart   EQU 0E800H
 
-		ORG 0F000h
-word_F000:	DS 75Ah
-CursorAddress:	DS 2
-TapeReadConst:	DS 1		
-TapeWriteConst:	DS 1		
-CursorVisible:	DS 1		; Show / Hide cursor ESC sequence $1B +	$61; $1B + $62
-EscSequenceState: DS	1
-LastKeyStatus:	DS 2		; H - last key pressed,	L - autorepeat delay counter
-RST6_VAR3:	DS 2		
-RST6_VAR1:	DS 2		
-		DS 4
-F7FE_storedHere:DS 2		; $F7FE	is stored here
-RST6_VAR2:	DS 2		
-		DS 3
-RST6_RUN_Var1:	DS 2		
-RST6_RUN_Var2:	DS 1	
-JMPcommand:	DS 1		
-					; $C3  "JMP" command is stored here
-JMPaddress:	DS 2		
-word_F777:	DS 2
-word_F779:	DS 2
-byte_F77B:	DS 1		
-TapeReadVAR:	DS 1
-HookActive:	DS 1		; is not 0 if hook routine is active
-HookJmp:	DS 1		
-					; Monitor writes here ;C3 = "JMP" instruction
-HookAddress:	DS 2		
-FreeMemAddr:	DS 2
-CmdLineBuffer:	DS 7Ch		
+        ORG 0F000h
+word_F000:      DS 75Ah
+CursorAddress:  DS 2
+TapeReadConst:  DS 1     
+TapeWriteConst: DS 1     
+CursorVisible:  DS 1    ; Показать/скрыть курсор: ESC $1B+$61/$1B+$62
+EscSequenceState: DS 1
+LastKeyStatus:  DS 2    ; H - последняя нажатая клавиша, L - счетчик автоповтора
+RST6_VAR3:      DS 2    
+RST6_VAR1:      DS 2    
+        DS 4
+F7FE_storedHere:DS 2    ; Здесь хранится $F7FE
+RST6_VAR2:      DS 2    
+        DS 3
+RST6_RUN_Var1:  DS 2    
+RST6_RUN_Var2:  DS 1    
+JMPcommand:     DS 1    ; Здесь хранится команда $C3 "JMP"
+JMPaddress:     DS 2    
+word_F777:      DS 2
+word_F779:      DS 2
+byte_F77B:      DS 1    
+TapeReadVAR:    DS 1
+HookActive:     DS 1    ; Флаг активности обработчика прерываний (не 0 = активно)
+HookJmp:        DS 1    ; Здесь хранится $C3 "JMP" для обработчика
+HookAddress:    DS 2    
+FreeMemAddr:    DS 2
+CmdLineBuffer:  DS 7Ch  
 
 ; ===========================================================================
+; Начало исполняемого кода
+        ORG 0F800h
+        JP    ColdReset     ; Точка входа при холодном старте
 
-; Segment type:	Pure code
-		ORG 0F800h
-		jmp	ColdReset
+        JP    InputSymbol   ; Ввод символа с клавиатуры
 
-		jmp	InputSymbol
+        JP    TapeReadByte  ; Чтение байта с магнитофона
 
-		jmp	TapeReadByte
+        JP    PrintCharFromC ; Печать символа из регистра C
 
-		jmp	PrintCharFromC
+        JP    TapeWriteByte ; Запись байта на магнитофон
 
-		jmp	TapeWriteByte
+        JP    HookJmp       ; Прямой вызов обработчика печати символа
 
-		jmp	HookJmp		; Entry	point for direct call of PrintChar Hook	subroutine
+        JP    GetKeyboardStatus ; Проверка состояния клавиатуры
 
-		jmp	GetKeyboardStatus
+        JP    PrintHexByte  ; Печать байта в HEX
 
-		jmp	PrintHexByte
+        JP    PrintString   ; Печать строки
 
-		jmp	PrintString
+        JP    ReadKeyCode   ; Чтение кода клавиши
 
-		jmp	ReadKeyCode
+        JP    GetCursorPos  ; Получение позиции курсора
 
-		jmp	GetCursorPos
+        JP    ReadVideoRAM  ; Чтение видеопамяти
 
-		jmp	ReadVideoRAM
+        JP    TapeReadBlock ; Чтение блока с магнитофона
 
-		jmp	TapeReadBlock
+        JP    TapeWriteBlock ; Запись блока на магнитофон
 
-		jmp	TapeWriteBlock
+        JP    CalcChecksum  ; Вычисление контрольной суммы
 
-		jmp	CalcChecksum
+        RET			; Инициализация обновления экрана (заглушка)
 
-		ret			; Init display refresh (dummy)
+        DW    0
+        JP    GetFreeMemAddr ; Получение адреса свободной памяти
 
-		DW  0
-		jmp	GetFreeMemAddr
+        JP    SetFreeMemAddr ; Установка адреса свободной памяти
 
-		jmp	SetFreeMemAddr
+; ---------------------------------------------------------------------------
+; Холодный старт системы
+ColdReset:              
+        LD    SP, 0F800h   ; Инициализация указателя стека
+
+        IF    ~~FixInitBug
+        ; Вывод приветственного сообщения (оригинальное расположение)
+        LD    HL, WelcomeMsg ; "\x1F\nm/80k "
+        CALL  PrintString
+        ENDIF
+
+        ; Очистка области $F75D..$F7A2
+        LD    HL, 0F75Dh
+        LD    DE, 0F7A2h
+        LD    BC, 0
+        CALL  DirectiveFill
 
+        ; Настройка обработчика прерываний
+        LD    A, 0C3h      ; Код инструкции "JMP"
+        LD    (HookJmp), A
 
-ColdReset:				
-		lxi	sp, 0F800h	; init stack pointer
+        IF    FixInitBug
+        ; Вывод приветственного сообщения (исправленное расположение)
+        LD    HL, WelcomeMsg ; "\x1F\nm/80k "
+        CALL  PrintString
+        ENDIF
 
-		if ~~FixInitBug
-		; Welcome message block	  -----> ! move	after Clear Area block
-		lxi	h, WelcomeMsg	; "\x1F\nm/80k "
-		call	PrintString
-		endif
+        ; Поиск конца оперативной памяти
+        LD    HL, 0
 
-		; Clear	area $F75D..$F7A2
-		lxi	h, 0F75Dh
-		lxi	d, 0F7A2h
-		lxi	b, 0
-		call	DirectiveFill
+ContinueSearch:             
+        LD    C, (HL)      ; Сохраняем текущее значение
+        LD    A, 55h       ; Тестовый паттерн 1
+        LD    (HL), A
+        XOR   (HL)
+        LD    B, A
+        LD    A, 0AAh      ; Тестовый паттерн 2
+        LD    (HL), A
+        XOR   (HL)
+        OR    B
+        JP    NZ, RamEndFound ; Если память не отвечает - конец ОЗУ
 
-		mvi	a, 0C3h		; CPU instruction "JMP"
-		sta	HookJmp
+        ; Восстановление значения и переход к следующей ячейке
+        LD    (HL), C
+        INC   HL
+        LD    A, H
+        CP    0E0h         ; Проверка достижения видеопамяти ($E000)
+        JP    Z, RamEndFound
 
-		if FixInitBug
-		lxi	h, WelcomeMsg	; "\x1F\nm/80k "
-		call	PrintString
-		endif
-;
-;
-		; Find RAM end
-		lxi	h, 0
+        JP    ContinueSearch
 
+; ---------------------------------------------------------------------------
+; Точка входа для теплого старта RK/86
+RK86WarmReset:              
+        JP    WarmReset    ; Вектор теплого старта RK/86 ($F86C)
 
-ContinueSearch:				
-		mov	c, m
-		mvi	a, 55h
-		mov	m, a
-		xra	m
-		mov	b, a
-		mvi	a, 0AAh
-		mov	m, a
-		xra	m
-		ora	b
-		jnz	RamEndFound
+RamEndFound:                
+        DEC   HL           ; Корректировка последнего адреса ОЗУ
+        LD    (FreeMemAddr), HL
+        CALL  PrintHexWord ; Печать верхнего адреса свободной памяти
 
-		mov	m, c
-		inx	h
-		mov	a, h
-		cpi	0E0h		; Look for RAM up to $E000 - VideoRAM
-		jz	RamEndFound
-
-		jmp	ContinueSearch
-
-
-RK86WarmReset:				
-		jmp	WarmReset	; $F86C	- RK/86	WarmReset vector (for compatibility)
-
-
-RamEndFound:				
-		dcx	h
-		shld	FreeMemAddr
-		call	PrintHexWord	; Print	Upper Free Mem address
-
-		lxi	h, DefaultRdWrConst
-		shld	TapeReadConst
-		lxi	h, DummyHook
-		shld	HookAddress
-		lxi	h, 0F7FEh	; ???? Why does	it needed ????
-		shld	F7FE_storedHere
-
-
-WarmReset:				
-		mvi	a, 83h
-		out	4		; Init	BB55
-		sta	CursorVisible	; Set CursorVisible (<>	0)
-		mvi	a, 0C3h		; "JMP" command
-		sta	JMPcommand
-
-
-ProcessDirective:			
-		lxi	sp, 0F800h
-		lxi	h, DirectivePrompt ; "\r\n-->"
-		call	PrintString
-
-		call	InputDirective
-
-		lxi	h, RK86WarmReset
-		push	h
-		lxi	h, CmdLineBuffer
-		mov	a, m
-		cpi	'X'
-		jz	DirectiveRegisters
-
-		push	psw
-		call	sub_F952
-
-		lhld	word_F779
-		mov	c, l
-		mov	b, h
-		lhld	word_F777
-		xchg
-		lhld	JMPaddress
-		pop	psw
-		cpi	'D'
-		jz	DirectiveDump
-
-		cpi	'C'
-		jz	DirectiveCompare
-
-		cpi	'F'
-		jz	DirectiveFill
-
-		cpi	'S'
-		jz	DirectiveSearch
-
-		cpi	'T'
-		jz	DirectiveCopy
-
-		cpi	'M'
-		jz	DirectiveModify
-
-		cpi	'G'
-		jz	DirectiveRun
-
-		cpi	'I'
-		jz	DirectiveTapeInp
-
-		cpi	'O'
-		jz	DirectiveTapeOut
-
-		cpi	'W'
-		jz	DirectiveSearchWrd
-
-		cpi	'A'
-		jz	DirectiveHookAdr
-
-		cpi	'H'
-		jz	DirectiveTapeConst
-
-		cpi	'R'
-		jz	DirectiveReadROM
-
-		jmp	SyntaxError
-
-
-ProcessBackspace:			
-		mvi	a, CmdLineBuffer & 0FFH
-		cmp	l
-		jz	GotoCmdLineBegin ; already at the command line beginning
-
-		push	h
-		lxi	h, BackspaceStr	; "\b \b"
-		call	PrintString
-
-		pop	h
-		dcx	h
-		jmp	InputNextSymbol
-
-
-InputDirective:				
-
-		lxi	h, CmdLineBuffer
-
-
-GotoCmdLineBegin:			
-		mvi	b, 0
-
-
-InputNextSymbol:			
-		call	InputSymbol
-
-		cpi	7Fh
-		jz	ProcessBackspace
-
-		cpi	8
-		jz	ProcessBackspace
-
-		cnz	PrintCharfromA
-
-		mov	m, a
-		cpi	0Dh
-		jz	ProcessReturn
-
-		cpi	'.'
-		jz	ProcessDirective
-
-		mvi	b, 0FFh
-		mvi	a, 0A2h	; 'ў'
-		cmp	l
-		jz	SyntaxError
-
-		inx	h
-		jmp	InputNextSymbol
-
-
-ProcessReturn:				
-		mov	a, b
-; End of function InputDirective
-
-		ral
-		lxi	d, CmdLineBuffer
-		mvi	b, 0
-		ret
-
-
-PrintString:				
-		mov	a, m
-		ana	a
-		rz			; Exit when 0 -	string treminator
-		call	PrintCharfromA
-
-		inx	h
-		jmp	PrintString
-
-
-sub_F952:				
-		lxi	h, JMPaddress
-		lxi	d, byte_F77B
-		mvi	c, 0
-		call	DirectiveFill
-
-		lxi	d,  CmdLineBuffer+1
-		call	sub_F980
-
-		shld	JMPaddress
-		shld	word_F777
-		rc
-		mvi	a, 0FFh
-		sta	byte_F77B
-		call	sub_F980
-
-		shld	word_F777
-		rc
-		call	sub_F980
-
-		shld	word_F779
-		rc
-		jmp	SyntaxError
-
-
-sub_F980:				
-		lxi	h, 0
-
-
-loc_F983:				
-		ldax	d
-		inx	d
-		cpi	0Dh
-		jz	loc_F9B4
-
-		cpi	','
-		rz
-		cpi	' '
-		jz	loc_F983
-
-		sui	'0'
-		jm	SyntaxError
-
-		cpi	0Ah
-		jm	loc_F9A8
-
-		cpi	11h
-		jm	SyntaxError
-
-		cpi	17h
-		jp	SyntaxError
-
-		sui	7
-
-
-loc_F9A8:				
-		mov	c, a
-		dad	h
-		dad	h
-		dad	h
-		dad	h
-		jc	SyntaxError
-
-		dad	b
-		jmp	loc_F983
-
-
-loc_F9B4:				
-		stc
-		ret
-
-
-Compare_HL_DE:				
-		mov	a, h
-		cmp	d
-		rnz
-		mov	a, l
-		cmp	e
-		ret
-
-
-Iterate_HL_DE_Brk:			
-		call	CheckBreakByKbrd
-
-
-Iterate_HL_to_DE:			
-		call	Compare_HL_DE
-
-		jnz	Inc_HL
-
-
-loc_F9C5:				
-		inx	sp
-		inx	sp
-		ret
-
-
-Inc_HL:					
-		inx	h
-		ret
-
-
-CheckBreakByKbrd:			
-		call	ReadKeyCode
-
-		cpi	3		; Key "“‘+‘"
-		rnz
-		jmp	SyntaxError
-
-NextLineAndTab:				
-		push	h
-		lxi	h, NextLineAndTabStr ; "\r\n\x18\x18\x18"
-		call	PrintString
-
-		pop	h
-		ret
-
-PrintBytePtrHL:				
-		mov	a, m
-
-PrintLowHexByte:			
-		push	b
-		call	PrintHexByte
-
-		call	PrintBlank
-
-		pop	b
-		ret
-
-DirectiveReadROM:			
-		mvi	a, 90h
-		out	0A3h		; BB55 - Control word
-
-
-ReadNextRomByte:			
-		mov	a, l
-		out	0A1h		; BB55 - Port B
-		mov	a, h
-		out	0A2h		; BB55 - Port C
-		in	0A0h		; BB55 - Port A
-		stax	b
-		inx	b
-		call	Iterate_HL_to_DE
-
-		jmp	ReadNextRomByte
-
-GetFreeMemAddr:				
-		lhld	FreeMemAddr
-		ret
-
-
-SetFreeMemAddr:				
-		shld	FreeMemAddr
-		ret
-
-DirectiveHookAdr:			
-		shld	HookAddress
-		ret
-
-
-DirectiveDump:				
-		call	LineFeed
-
-		call	PrintHexWord
-
-		push	h
-		mov	a, l
-		ani	0Fh
-		mov	c, a
-		rar
-		add	c
-		add	c
-		adi	5
-		mov	b, a
-		call	sub_FA5A
-
-
-loc_FA1A:				
-		mov	a, m
-		call	PrintHexByte
-
-		call	Compare_HL_DE
-
-		inx	h
-		jz	loc_FA32
-
-		mov	a, l
-		ani	0Fh
-		push	psw
-		ani	1
-		cz	PrintBlank
-
-		pop	psw
-		jnz	loc_FA1A
-
-
-loc_FA32:				
-		pop	h
-		mov	a, l
-		ani	0Fh
-		adi	2Eh ; '.'
-		mov	b, a
-		call	sub_FA5A
-
-
-loc_FA3C:				
-		mov	a, m
-		cpi	7Fh ; ''
-		jnc	loc_FA47
-
-		cpi	20h ; ' '
-		jnc	loc_FA49
-
-
-loc_FA47:				
-		mvi	a, 2Eh ; '.'
-
-
-loc_FA49:				
-		call	PrintCharfromA
-
-		call	Compare_HL_DE
-
-		rz
-		inx	h
-		mov	a, l
-		ani	0Fh
-		jnz	loc_FA3C
-
-		jmp	DirectiveDump
-
-sub_FA5A:				
-		lda	CursorAddress
-		ani	3Fh
-		cmp	b
-		rnc
-		call	PrintBlank
-
-		jmp	sub_FA5A
-
-PrintBlank:				
-		mvi	a, ' '
-		jmp	PrintCharfromA
-
-
-DirectiveCompare:			
-		ldax	b
-		cmp	m
-		jz	NoDifference
-
-		call	PrintNextLnHexWord
-
-		call	PrintBytePtrHL
-
-		ldax	b
-		call	PrintLowHexByte
-
-
-NoDifference:				
-		inx	b
-		call	Iterate_HL_DE_Brk
-
-		jmp	DirectiveCompare
-
-DirectiveFill:				
-		mov	m, c
-		call	Iterate_HL_to_DE
-
-		jmp	DirectiveFill
-
-DirectiveSearch:			
-		mov	a, c
-		cmp	m
-		cz	PrintNextLnHexWord
-
-		call	Iterate_HL_DE_Brk
-
-		jmp	DirectiveSearch
-
-
-DirectiveSearchWrd:			
-		mov	a, m
-		cmp	c
-		jnz	loc_FAA0
-
-		inx	h
-		mov	a, m
-		cmp	b
-		dcx	h
-		cz	PrintNextLnHexWord
-
-
-loc_FAA0:				
-		call	Iterate_HL_DE_Brk
-
-		jmp	DirectiveSearchWrd
-
-
-DirectiveCopy:				
-		mov	a, m
-		stax	b
-		inx	b
-		call	Iterate_HL_to_DE
-
-		jmp	DirectiveCopy
-
-
-DirectiveModify:			
-		call	PrintNextLnHexWord
-
-		call	PrintBytePtrHL
-
-		push	h
-		call	InputDirective
-
-		pop	h
-		jnc	loc_FAC4
-
-		push	h
-		call	sub_F980
-
-		mov	a, l
-		pop	h
-		mov	m, a
-
-
-loc_FAC4:				
-		inx	h
-		jmp	DirectiveModify
-
-
-DirectiveRun:				
-		call	Compare_HL_DE
-
-		jz	PlainRun
-
-		xchg
-		shld	RST6_RUN_Var1
-		mov	a, m
-		sta	RST6_RUN_Var2
-		mvi	m, 0F7h		; CPU command "RST6"
-		mvi	a, 0C3h		; CPU command "JMP"
-		sta	30h
-		lxi	h, RST6_handler
-		shld	31h
-
-
-PlainRun:				
-		lxi	sp, 0F766h
-		pop	b
-		pop	d
-		pop	h
-		pop	psw
-		sphl
-		lhld	RST6_VAR1
-		jmp	JMPcommand
-
-RST6_handler:				
-		shld	RST6_VAR1
-		push	psw
-		pop	h
-		shld	RST6_VAR2
-		pop	h
-		dcx	h
-		shld	RST6_VAR3
-		lxi	h, 0
-		dad	sp
-		lxi	sp, RST6_VAR2
-		push	h
-		push	d
-		push	b
-		lxi	sp, 0F800h
-		lhld	RST6_VAR3
-		xchg
-		lhld	RST6_RUN_Var1
-		call	Compare_HL_DE
-
-		jnz	DirectiveRegisters
-
-		lda	RST6_RUN_Var2
-		mov	m, a
-
-
-DirectiveRegisters:			
-		lxi	h, RegistersListStr ; "\r\nPC-\r\nHL-\r\nBC-\r\nDE-\r\nSP-\r\nAF-\x19\x19\x19\x19\x19\x19"
-		call	PrintString
-
-		lxi	h, RST6_VAR3
-		mvi	b, 6
-
-
-loc_FB27:				
-		mov	e, m
-		inx	h
-		mov	d, m
-		push	b
-		push	h
-		xchg
-		call	PrintNextLnHexWord
-
-		call	InputDirective
-
-		jnc	loc_FB3F
-
-		call	sub_F980
-
-		pop	d
-		push	d
-		xchg
-		mov	m, d
-		dcx	h
-		mov	m, e
-
-
-loc_FB3F:				
-		pop	h
-		pop	b
-		dcr	b
-		inx	h
-		jnz	loc_FB27
-
-		jmp	RK86WarmReset
-
-
-GetCursorPos:				
-		push	psw
-		lhld	CursorAddress
-		mov	a, h
-		ani	7
-		mov	h, a
-		mov	a, l
-		ani	3Fh
-		adi	8
-		dad	h
-		dad	h
-		inr	h
-		inr	h
-		inr	h
-		mov	l, a
-		pop	psw
-		ret
-
-
-ReadVideoRAM:				
-		push	h
-		lhld	CursorAddress
-		mov	a, m
-		pop	h
-		ret
-
-
-DirectiveTapeConst:			
-		call	NextLineAndTab
-
-		lxi	h, 0FF80h
-		mvi	b, 7Bh ; '{'
-		in	1
-		mov	c, a
-
-
-loc_FB70:				
-		in	1
-		cmp	c
-		jz	loc_FB70
-
-
-loc_FB76:				
-		mov	c, a
-
-
-loc_FB77:				
-		inx	h
-		in	1
-		cmp	c
-		jz	loc_FB77
-
-		dcr	b
-		jnz	loc_FB76
-
-		dad	h
-		mov	a, h
-		dad	h
-		add	h
-		mov	l, a
-		jmp	PrintHexWord
-
-
-DirectiveTapeInp:			
-		lda	byte_F77B
-		ora	a
-		jz	loc_FB95
-
-		mov	a, e
-		sta	TapeReadConst
-
-
-loc_FB95:				
-		call	TapeReadBlock
-
-		call	PrintNextLnHexWord
-
-		xchg
-		call	PrintNextLnHexWord
-
-		xchg
-		push	b
-		call	CalcChecksum
-
-		mov	h, b
-		mov	l, c
-		call	PrintNextLnHexWord
-
-		pop	d
-		call	Compare_HL_DE
-
-		rz
-		xchg
-		call	PrintNextLnHexWord
-
-
-SyntaxError:				
-		mvi	a, '?'
-		call	PrintCharfromA
-
-		jmp	ProcessDirective
-
-
-TapeReadBlock:				
-		mvi	a, 0FFh
-		call	sub_FBDA
-
-		push	h
-		dad	b
-		xchg
-		call	sub_FBD8
-
-		pop	h
-		dad	b
-		xchg
-		in	5
-		ani	4
-		rz
-		push	h
-		call	sub_FBE5
-
-		mvi	a, 0FFh
-		call	sub_FBDA
-
-		pop	h
-		ret
-
-
-sub_FBD8:				
-		mvi	a, 8
-
-
-sub_FBDA:				
-		call	TapeReadByte
-
-		mov	b, a
-		mvi	a, 8
-		call	TapeReadByte
-
-		mov	c, a
-		ret
-
-
-sub_FBE5:				
-		mvi	a, 8
-		call	TapeReadByte
-
-		mov	m, a
-		call	Iterate_HL_to_DE
-
-		jmp	sub_FBE5
-
-
-CalcChecksum:				
-		lxi	b, 0
-
-
-loc_FBF4:				
-		mov	a, m
-		add	c
-		mov	c, a
-		push	psw
-		call	Compare_HL_DE
-
-		jz	loc_F9C5
-
-		pop	psw
-		mov	a, b
-		adc	m
-		mov	b, a
-		call	Iterate_HL_to_DE
-
-		jmp	loc_FBF4
-
-
-DirectiveTapeOut:			
-		mov	a, c
-		ora	a
-		jz	loc_FC10
-
-		sta	TapeWriteConst
-
-
-loc_FC10:				
-		push	h
-		call	CalcChecksum
-
-		pop	h
-		call	PrintNextLnHexWord
-
-		xchg
-		call	PrintNextLnHexWord
-
-		xchg
-		push	h
-		mov	h, b
-		mov	l, c
-		call	PrintNextLnHexWord
-
-		pop	h
-
-
-TapeWriteBlock:				
-		push	b
-		lxi	b, 0
-
-
-loc_FC28:				
-		call	TapeWriteByte
-
-		dcr	b
-		xthl
-		xthl
-		jnz	loc_FC28
-
-		mvi	c, 0E6h	; 'ж'
-		call	TapeWriteByte
-
-		call	sub_FC6C
-
-		xchg
-		call	sub_FC6C
-
-		xchg
-		call	sub_FC62
-
-		lxi	h, 0
-		call	sub_FC6C
-
-		mvi	c, 0E6h	; 'ж'
-		call	TapeWriteByte
-
-		pop	h
-		call	sub_FC6C
-
-		ret
-
-
-PrintNextLnHexWord:			
-		push	b
-		call	NextLineAndTab
-
-		call	PrintHexWord
-
-		pop	b
-		ret
-
-
-
-PrintHexWord:				
-		mov	a, h
-		call	PrintHexByte
-
-		mov	a, l
-		jmp	PrintLowHexByte
-
-
-sub_FC62:				
-		mov	c, m
-		call	TapeWriteByte
-
-		call	Iterate_HL_to_DE
-
-		jmp	sub_FC62
-
-
-
-sub_FC6C:				
-		mov	c, h
-		call	TapeWriteByte
-
-		mov	c, l
-		jmp	TapeWriteByte
-
-
-TapeReadByte:				
-		push	h
-		push	b
-		push	d
-		mov	d, a
-
-
-loc_FC78:				
-		mvi	c, 0
-		in	1
-		ani	1
-		mov	e, a
-
-
-loc_FC7F:				
-		mov	a, c
-		ani	7Fh
-		rlc
-		mov	c, a
-		mvi	h, 0
-
-
-loc_FC86:				
-		dcr	h
-		jz	loc_FCD2
-
-		in	1
-		ani	1
-		cmp	e
-		jz	loc_FC86
-
-		ora	c
-		mov	c, a
-		dcr	d
-		lda	TapeReadConst
-		jnz	loc_FC9D
-
-		sui	12h
-
-
-loc_FC9D:				
-		mov	b, a
-
-
-loc_FC9E:				
-		dcr	b
-		jnz	loc_FC9E
-
-		inr	d
-		in	1
-		ani	1
-		mov	e, a
-		mov	a, d
-		ora	a
-		jp	loc_FCC6
-
-		mov	a, c
-		cpi	0E6h ; 'ж'
-		jnz	loc_FCBA
-
-		xra	a
-		sta	TapeReadVAR
-		jmp	loc_FCC4
-
-
-loc_FCBA:				
-		cpi	19h
-		jnz	loc_FC7F
-
-		mvi	a, 0FFh
-		sta	TapeReadVAR
-
-
-loc_FCC4:				
-		mvi	d, 9
-
-
-loc_FCC6:				
-		dcr	d
-		jnz	loc_FC7F
-
-		lda	TapeReadVAR
-		xra	c
-		pop	d
-		pop	b
-		pop	h
-		ret
-
-
-loc_FCD2:				
-		mov	a, d
-		ora	a
-		jp	SyntaxError
-
-		call	CheckBreakByKbrd
-
-		jmp	loc_FC78
-
-
-TapeWriteByte:				
-		push	b
-		push	d
-		push	psw
-		mvi	d, 8
-
-
-loc_FCE2:				
-		mov	a, c
-		rlc
-		mov	c, a
-		mvi	a, 1
-		xra	c
-		out	1
-		lda	TapeWriteConst
-		mov	b, a
-
-
-loc_FCEE:				
-		dcr	b
-		jnz	loc_FCEE
-
-		mvi	a, 0
-		xra	c
-		out	1
-		dcr	d
-		lda	TapeWriteConst
-		jnz	loc_FD00
-
-		sui	0Eh
-
-
-loc_FD00:				
-		mov	b, a
-
-
-loc_FD01:				
-		dcr	b
-		jnz	loc_FD01
-
-		inr	d
-		dcr	d
-		jnz	loc_FCE2
-
-		pop	psw
-		pop	d
-		pop	b
-		ret
-
-
-PrintHexByte:				
-		push	psw
-		rrc
-		rrc
-		rrc
-		rrc
-		call	sub_FD17
-
-		pop	psw
-
-
-sub_FD17:				
-		ani	0Fh
-		cpi	0Ah
-		jm	loc_FD20
-
-		adi	7
-
-
-loc_FD20:				
-		adi	30h ; '0'
-
-
-PrintCharfromA:				
-		mov	c, a
-
-
-PrintCharFromC:				
-
-		push	psw
-		push	b
-		push	d
-		push	h
-		call	GetKeyboardStatus ; ???? how it	works ??? Result is disrupted by following code
-
-		mvi	b, 0		; Hide cursor in current position
-		call	ShowHideCursor
-
-		lhld	CursorAddress
-		lda	EscSequenceState
-		dcr	a
-		jm	NotInEscSequence ; if EscCurPosState = 0
-
-		jz	CheckIf59escCode ; if EscCurPosState = 1 - $1B ESC was found before
-
-		dcr	a
-		jnz	ProcessEsc59ArgX ; if EscCurPsState = 3	- $1B+$59 was found before
-
-
-		; Process Esc59	argument Y
-		mov	a, c
-		sui	20h
-		jp	CheckUpBound
-
-		xra	a		; if Y < 0 then	set Y =	0
-		jmp	ConvertYtoVideoAddr
-
-
-CheckUpBound:				
-		cpi	ScreenHeight
-		jm	ConvertYtoVideoAddr
-
-		mvi	a, ScreenHeight-1
-
-
-ConvertYtoVideoAddr:			
-		rrc
-		rrc
-		mov	c, a
-		ani	0C0h
-		mov	b, a
-		mov	a, l
-		ani	3Fh
-		ora	b
-		mov	l, a
-		mov	a, c
-		ani	7
-		mov	b, a
-		mov	a, h
-		ani	0F8h
-		ora	b
-		mov	h, a
-		mvi	a, 3
-
-
-UpdateEscCurPsState:			
-		sta	EscSequenceState
-
-
-UpdCurPosAndReturn:			
-		shld	CursorAddress
-
-
-ShowCursorAndReturn:			
-		mvi	b, 0FFh		; Show cursor in new position
-		call	ShowHideCursor
-
-		pop	h
-		pop	d
-		pop	b
-		pop	psw
-		ret
-
-
-ShowHideCursor:				
-		lda	CursorVisible
-		ora	a
-		rz			; exit if a=0(hide) or CursorVisible = 0
-		lhld	CursorAddress
-		lxi	d, 0F801h	; $F801	= -$7FF
-		dad	d		; Calculate Cursor buffer position
-		mov	m, b
-		ret
-
-ProcessEsc59ArgX:			
-		mov	a, c
-		sui	20h
-		jp	CheckRightBound
-
-		xra	a		; if X < 0 - Set X=0
-		jmp	ConvertXToVideoAddr
-
-
-CheckRightBound:			
-		cpi	ScreenWidth
-		jm	ConvertXToVideoAddr
-
-		mvi	a, ScreenWidth-1
-
-
-ConvertXToVideoAddr:			
-		mov	b, a
-		mov	a, l
-		ani	0C0h
-		ora	b
-		mov	l, a
-
-
-EndEscSequence:				
-		xra	a		; ;  no	ESC sequence in	progress
-		jmp	UpdateEscCurPsState
-
-
-CheckIf59escCode:			
-		mov	a, c
-		cpi	59h		; $1B +	$59   (ESC codes - set cursor position)
-		jnz	CheckIf61escCode
-
-		mvi	a, 2		; 59h ESC code found
-		jmp	UpdateEscCurPsState
-
-
-CheckIf61escCode:			
-		cpi	61h
-		jnz	CheckIf62escCode
-
-		xra	a		; Hide cursor
-		jmp	UpdateEsc6162
-
-
-CheckIf62escCode:			
-		cpi	62h
-		jnz	EndEscSequence
-
-
-UpdateEsc6162:				
-		sta	CursorVisible
-		jmp	EndEscSequence
-
-
-NotInEscSequence:			
-		in	5
-		ani	6		; wait for "“‘"+"CC" keys unpressed
-		jz	NotInEscSequence ; <---- !!! Not Clear how it works !!!
-
-		mvi	a, 10h		; 10h ESC code - PrintCHar hook	on / off
-		cmp	c
-		lda	HookActive
-		jnz	GoHookAndPrint
-
-		cma
-		sta	HookActive
-		jmp	UpdCurPosAndReturn
-
-
-GoHookAndPrint:				
-		ora	a
-		cnz	HookJmp		; Call hook subroutine if HookActive <>	0
-
-		mov	a, c
-		cpi	1Fh
-		jz	DoClearScreen
-
-		jm	ProcessEscCodes
-
-
-DoPrintChar:				
-		mov	m, a
-		inx	h
-		mov	a, h
-		cpi	SymbolBufEndHI
-		jm	UpdCurPosAndReturn
-
-		call	LineFeed
-
-		jmp	ShowCursorAndReturn
-
-
-DoClearScreen:				
-		mvi	b, ' '
-		mvi	a, 0F0h		; This is Video	RAM end	for Clear Screen = let keep it always $F0
-		lxi	h, CursorBufferStart
-
-
-ClearNextScrPos:			
-		mov	m, b
-		inx	h
-		mov	m, b
-		inx	h
-		cmp	h
-		jnz	ClearNextScrPos
-
-
-DoCursorHome:				
-		lxi	h, SymbolBufferStart
-		jmp	UpdCurPosAndReturn
-
-
-ProcessEscCodes:			
-		cpi	0Ch
-		jz	DoCursorHome
-
-		cpi	0Dh
-		jz	DoReturn
-
-		cpi	0Ah
-		jz	DoLineFeed
-
-		cpi	8
-		jz	DoCursorLeft
-
-		cpi	18h
-		jz	DoCursorRight
-
-		cpi	19h
-		jz	DoCursorUp
-
-		cpi	7
-		jz	DoBeep
-
-		cpi	1Ah
-		jz	DoCursorDown
-
-		cpi	1Bh
-		jnz	DoPrintChar
-
-;
-;		DoSetCursorPosition
-		mvi	a, 1		; 1Bh ESC code found
-		jmp	UpdateEscCurPsState
-
-
-;-----------------------------------------------
-
-DoBeep:					
-		mvi	c, 80h
-		mvi	e, 20h
-
-
-WaweRepeat:				
-		mov	d, e
-
-
-DelayLoop1:				
-		mvi	a, 0Fh
-		out	4
-		dcr	e
-		jnz	DelayLoop1
-
-		mov	e, d
-
-
-DelayLoop2:				
-		mvi	a, 0Eh
-		out	4
-		dcr	d
-		jnz	DelayLoop2
-
-		dcr	c
-		jnz	WaweRepeat
-
-		jmp	ShowCursorAndReturn
-
-;-------------------------------------------
-
-DoReturn:				
-		mov	a, l
-		ani	0C0h
-		mov	l, a
-		jmp	UpdCurPosAndReturn
-
-
-DoCursorRight:				
-		inx	h
-
-
-CheckVertBoundary:			
-		mov	a, h
-		ani	7
-		ori	(SymbolBufferStart & 0FF00H) >> 8
-		mov	h, a
-		jmp	UpdCurPosAndReturn
-
-
-DoCursorLeft:				
-		dcx	h
-		jmp	CheckVertBoundary
-
-
-DoLineFeed:				
-		lxi	b, ScreenWidth
-		dad	b
-		mov	a, h
-		cpi	SymbolBufEndHI	; Upper	Video Memory bound (HI byte)
-		jm	UpdCurPosAndReturn
-
-
-		; Scroll screen	up
-		lxi	h, SymbolBufferStart
-		lxi	b, SymbolBufferStart+ScreenWidth
-
-
-ContinueScroll:				
-		ldax	b
-		mov	m, a
-		inx	h
-		inx	b
-		ldax	b
-		mov	m, a
-		inx	h
-		inx	b
-		mov	a, b
-		cpi	SymbolBufEndHI
-		jm	ContinueScroll
-
-		mvi	a, SymbolBufEndHI
-		mvi	c, ' '
-
-
-ClearLastLine:				
-		mov	m, c
-		inx	h
-		mov	m, c
-		inx	h
-		cmp	h
-		jnz	ClearLastLine
-
-		lhld	CursorAddress
-		mvi	h, SymbolBufEndHI-1 ; Position cursor in Last Line
-		mov	a, l
-		ori	0C0h
-		mov	l, a		; Keep X cursor	position
-		jmp	UpdCurPosAndReturn
-
-
-DoCursorUp:				
-		lxi	b, -ScreenWidth	; $FFC0	= -64
-
-
-AddBXtoHL:				
-		dad	b
-		jmp	CheckVertBoundary
-
-
-DoCursorDown:				
-		lxi	b, ScreenWidth
-		jmp	AddBXtoHL
-
-LineFeed:				
-		mvi	c, 0Dh
-		call	PrintCharFromC
-
-		mvi	c, 0Ah
-		jmp	PrintCharFromC
-
-
-GetKeyboardStatus:			
-		xra	a
-		out	7
-		in	6
-		ani	7Fh
-		cpi	7Fh
-		jnz	KeyIsPressed
-
-		xra	a
-		ret
-
-
-KeyIsPressed:				
-		mvi	a, 0FFh
-		ret
-
-
-InputSymbol:				
-		push	h
-		lhld	LastKeyStatus
-		call	WaitKeyStateChange
-
-		mvi	l, 20h		; Autorepeat rate delay
-		jz	Autorepeat
-
-
-loc_FED4:				
-		mvi	l, 2
-		call	WaitKeyStateChange
-
-		jnz	loc_FED4
-
-		cpi	80h ; 'Ђ'
-		jnc	loc_FED4
-
-		mvi	l, 80h		; Autorepeat start delay
-
-
-Autorepeat:				
-		shld	LastKeyStatus
-		pop	h
-		ret
-
-WaitKeyStateChange:			
-		call	ReadKeyCode
-
-		cmp	h
-		jnz	KeyStateChanged
-
-		push	psw
-		xra	a
-
-
-DoDelay:				
-		xchg
-		xchg
-		dcr	a
-		jnz	DoDelay
-
-		pop	psw
-		dcr	l
-		jnz	WaitKeyStateChange
-
-
-KeyStateChanged:			
-		mov	h, a
-		ret
-
-
-ReadKeyCode:				
-		push	b
-		push	d
-		push	h
-		lxi	b, 0FEh
-		mvi	d, 8
-
-
-loc_FF06:				
-		mov	a, c
-		out	7
-		rlc
-		mov	c, a
-		in	6
-		ani	7Fh
-		cpi	7Fh
-		jnz	loc_FF28
-
-		mov	a, b
-		adi	7
-		mov	b, a
-		dcr	d
-		jnz	loc_FF06
-
-		in	5
-		rar
-		mvi	a, 0FFh
-		jc	ReturnFromReadKey
-
-		dcr	a
-		jmp	ReturnFromReadKey
-
-
-loc_FF28:				
-		rar
-		jnc	loc_FF30
-
-		inr	b
-		jmp	loc_FF28
-
-
-loc_FF30:				
-		mov	a, b
-		cpi	30h ; '0'
-		jnc	GenerateEscCode
-
-		adi	30h ; '0'
-		cpi	3Ch ; '<'
-		jc	loc_FF44
-
-		cpi	40h ; '@'
-		jnc	loc_FF44
-
-		ani	2Fh
-
-
-loc_FF44:				
-		cpi	5Fh ; '_'
-		jnz	loc_FF4B
-
-		mvi	a, 7Fh ; ''
-
-
-loc_FF4B:				
-		mov	c, a
-		in	5
-		ani	7
-		cpi	7
-		mov	b, a
-		mov	a, c
-		jz	ReturnFromReadKey
-
-		mov	a, b
-		rar
-		rar
-		jnc	loc_FF68
-
-		rar
-		jnc	loc_FF6E
-
-		mov	a, c
-		ori	20h
-
-
-ReturnFromReadKey:			
-		pop	h
-		pop	d
-		pop	b
-		ret
-
-
-loc_FF68:				
-		mov	a, c
-		ani	1Fh
-		jmp	ReturnFromReadKey
-
-
-loc_FF6E:				
-		mov	a, c
-		cpi	7Fh ; ''
-		jnz	loc_FF76
-
-		mvi	a, 5Fh ; '_'
-
-
-loc_FF76:				
-		cpi	40h ; '@'
-		jnc	ReturnFromReadKey
-
-		cpi	30h ; '0'
-		jnc	loc_FF85
-
-		ori	10h
-		jmp	ReturnFromReadKey
-
-
-loc_FF85:				
-		ani	2Fh
-		jmp	ReturnFromReadKey
-
-
-GenerateEscCode:			
-		lxi	h, ESCcodesMap
-		sui	30h ; '0'
-		mov	c, a
-		mvi	b, 0
-		dad	b
-		mov	a, m
-		jmp	ReturnFromReadKey
-
-; End of function ReadKeyCode
-
-ESCcodesMap:	db  20h		
-		db  18h
-		db    8
-		db  19h
-		db  1Ah
-		db  0Dh
-		db  1Fh
-		db  0Ch
-DirectivePrompt:db 0Dh, 0Ah		
-		db "-->"
-		db 0
-NextLineAndTabStr:db 0Dh, 0Ah,	18h, 18h, 18h, 0 
-RegistersListStr:db 0Dh, 0Ah		
-		db "PC-"
-		db 0Dh, 0Ah
-		db "HL-"
-		db 0Dh, 0Ah
-		db "BC-"
-		db 0Dh, 0Ah
-		db "DE-"
-		db 0Dh, 0Ah
-		db "SP-"
-		db 0Dh, 0Ah
-		db "AF-"
-		db 19h, 19h, 19h, 19h,	19h, 19h, 0
-BackspaceStr:	db 8			
-		db " "
-		db 8, 0
-WelcomeMsg:	db 1Fh, 0Ah		
-		db "m/80k "
-		db 0
-DummyHook:	db 0C9h		
-					; CPU instruction "RET"  - dummy PrintChar hook
-		db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
-		db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
-		db 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
-		db 0FFh,0FFh,0FFh,0FFh
-; end of 'ROM'
-
-
-		;.end
+        ; Настройка констант по умолчанию
+        LD    HL, DefaultRdWrConst
+        LD    (TapeReadConst), HL
+        LD    HL, DummyHook
+        LD    (HookAddress), HL
+        LD    HL, 0F7FEh   ; Сохранение системной переменной
+        LD    (F7FE_storedHere), HL
+
+; ---------------------------------------------------------------------------
+; Теплый старт системы
+WarmReset:                 
+        LD    A, 83h       ; Инициализация контроллера BB55
+        OUT   (4), A
+        LD    (CursorVisible), A ; Включение отображения курсора
+        LD    A, 0C3h      ; Код инструкции "JMP"
+        LD    (JMPcommand), A
+
+; ---------------------------------------------------------------------------
+; Обработка директив монитора
+ProcessDirective:           
+        LD    SP, 0F800h   ; Восстановление стека
+        LD    HL, DirectivePrompt ; "\r\n-->"
+        CALL  PrintString
+
+        CALL  InputDirective ; Ввод директивы
+
+        LD    HL, RK86WarmReset
+        PUSH  HL           ; Возврат на теплый старт
+        LD    HL, CmdLineBuffer
+        LD    A, (HL)
+        CP    'X'          ; Директива регистров?
+        JP    Z, DirectiveRegisters
+
+        ; Разбор параметров директив
+        PUSH  AF
+        CALL  sub_F952
+
+        LD    HL, (word_F779)
+        LD    C, L
+        LD    B, H
+        LD    HL, (word_F777)
+        EX    DE, HL
+        LD    HL, (JMPaddress)
+        POP   AF
+
+        ; Диспетчеризация директив
+        CP    'D'
+        JP    Z, DirectiveDump
+
+        CP    'C'
+        JP    Z, DirectiveCompare
+
+        CP    'F'
+        JP    Z, DirectiveFill
+
+        CP    'S'
+        JP    Z, DirectiveSearch
+
+        CP    'T'
+        JP    Z, DirectiveCopy
+
+        CP    'M'
+        JP    Z, DirectiveModify
+
+        CP    'G'
+        JP    Z, DirectiveRun
+
+        CP    'I'
+        JP    Z, DirectiveTapeInp
+
+        CP    'O'
+        JP    Z, DirectiveTapeOut
+
+        CP    'W'
+        JP    Z, DirectiveSearchWrd
+
+        CP    'A'
+        JP    Z, DirectiveHookAdr
+
+        CP    'H'
+        JP    Z, DirectiveTapeConst
+
+        CP    'R'
+        JP    Z, DirectiveReadROM
+
+        JP    SyntaxError   ; Неизвестная директива
+
+; ---------------------------------------------------------------------------
+; Обработка Backspace
+ProcessBackspace:           
+        LD    A, CmdLineBuffer & 0FFH
+        CP    L
+        JP    Z, GotoCmdLineBegin ; Уже в начале строки
+
+        PUSH  HL
+        LD    HL, BackspaceStr ; "\b \b"
+        CALL  PrintString
+
+        POP   HL
+        DEC   HL
+        JP    InputNextSymbol
+
+; ---------------------------------------------------------------------------
+; Ввод директивы
+InputDirective:             
+        LD    HL, CmdLineBuffer
+
+GotoCmdLineBegin:           
+        LD    B, 0         ; Флаг пустой строки
+
+InputNextSymbol:            
+        CALL  InputSymbol   ; Ввод символа
+        CP    7Fh           ; Backspace?
+        JP    Z, ProcessBackspace
+        CP    8             ; Ctrl+H?
+        JP    Z, ProcessBackspace
+
+        CALL  NZ, PrintCharfromA ; Эхо-печать
+
+        LD    (HL), A       ; Сохранение в буфер
+        CP    0Dh           ; Enter?
+        JP    Z, ProcessReturn
+        CP    '.'           ; Повтор последней директивы?
+        JP    Z, ProcessDirective
+
+        LD    B, 0FFh       ; Установка флага непустой строки
+        LD    A, 0A2h       ; Проверка переполнения буфера
+        CP    L
+        JP    Z, SyntaxError
+
+        INC   HL
+        JP    InputNextSymbol
+
+ProcessReturn:              
+        LD    A, B
+        RLA                 ; Проверка пустой строки
+        LD    DE, CmdLineBuffer
+        LD    B, 0
+        RET
+
+; ---------------------------------------------------------------------------
+; Печать строки (HL=адрес строки)
+PrintString:                
+        LD    A, (HL)       ; Загрузка символа
+        AND   A             ; Проверка на 0 (конец строки)
+        RET  Z              ; Возврат если конец
+
+        CALL  PrintCharfromA ; Печать символа
+        INC   HL            ; Следующий символ
+        JP    PrintString
+
+; ---------------------------------------------------------------------------
+; Разбор параметров директив
+sub_F952:                   
+        LD    HL, JMPaddress
+        LD    DE, byte_F77B
+        LD    C, 0
+        CALL  DirectiveFill ; Заполнение нулями
+
+        LD    DE, CmdLineBuffer+1
+        CALL  sub_F980      ; Разбор первого параметра
+
+        LD    (JMPaddress), HL
+        LD    (word_F777), HL
+        RET  C             ; Возврат если конец строки
+
+        LD    A, 0FFh
+        LD    (byte_F77B), A
+        CALL  sub_F980      ; Разбор второго параметра
+
+        LD    (word_F777), HL
+        RET  C             ; Возврат если конец строки
+
+        CALL  sub_F980      ; Разбор третьего параметра
+
+        LD    (word_F779), HL
+        RET  C             ; Возврат если конец строки
+        JP    SyntaxError   ; Слишком много параметров
+
+; ---------------------------------------------------------------------------
+; Разбор шестнадцатеричного числа (DE=адрес строки)
+sub_F980:                   
+        LD    HL, 0         ; Инициализация результата
+
+loc_F983:                   
+        LD    A, (DE)       ; Чтение символа
+        INC   DE
+        CP    0Dh           ; Проверка конца строки
+        JP    Z, loc_F9B4
+
+        CP    ','           ; Разделитель параметров?
+        RET  Z
+        CP    ' '           ; Пропуск пробелов
+        JP    Z, loc_F983
+
+        ; Преобразование цифры
+        SUB   '0'
+        JP    M, SyntaxError ; Недопустимый символ
+
+        CP    0Ah
+        JP    M, loc_F9A8   ; Цифра 0-9
+
+        CP    11h
+        JP    M, SyntaxError ; Недопустимый символ
+
+        CP    17h
+        JP    P, SyntaxError
+
+        SUB   7             ; Коррекция для букв A-F
+
+loc_F9A8:                   
+        LD    C, A          ; Сохранение цифры
+        ADD   HL, HL        ; HL *= 16
+        ADD   HL, HL
+        ADD   HL, HL
+        ADD   HL, HL
+        JP    C, SyntaxError ; Переполнение
+
+        ADD   HL, BC        ; Добавление цифры
+        JP    loc_F983
+
+loc_F9B4:                   
+        SCF                 ; Установка флага Carry (конец строки)
+        RET
+
+; ===========================================================================
+; Служебные функции
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; Сравнение HL и DE
+Compare_HL_DE:              
+        LD    A, H
+        CP    D
+        RET  NZ
+        LD    A, L
+        CP    E
+        RET
+
+; ---------------------------------------------------------------------------
+; Инкремент HL с проверкой на достижение DE и прерывание
+Iterate_HL_DE_Brk:          
+        CALL  CheckBreakByKbrd ; Проверка прерывания
+Iterate_HL_to_DE:           
+        CALL  Compare_HL_DE ; Проверка достижения DE
+        JP    NZ, Inc_HL    ; Продолжить если не достигли
+loc_F9C5:                  
+        INC   SP            ; Корректировка стека
+        INC   SP
+        RET
+Inc_HL:                     
+        INC   HL
+        RET
+
+; ---------------------------------------------------------------------------
+; Проверка прерывания по клавише СТОП
+CheckBreakByKbrd:           
+        CALL  ReadKeyCode
+        CP    3             ; Код клавиши СТОП (Ctrl+C)
+        RET  NZ
+        JP    SyntaxError   ; Прерывание выполнения
+
+; ---------------------------------------------------------------------------
+; Переход на новую строку с табуляцией
+NextLineAndTab:             
+        PUSH  HL
+        LD    HL, NextLineAndTabStr ; "\r\n\x18\x18\x18"
+        CALL  PrintString
+        POP   HL
+        RET
+
+; ---------------------------------------------------------------------------
+; Печать байта по адресу HL
+PrintBytePtrHL:             
+        LD    A, (HL)
+PrintLowHexByte:            
+        PUSH  BC
+        CALL  PrintHexByte
+        CALL  PrintBlank
+        POP   BC
+        RET
+
+; ===========================================================================
+; Реализация директив монитора
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; Чтение ПЗУ (директива R)
+DirectiveReadROM:           
+        LD    A, 90h       ; Конфигурация BB55
+        OUT   (0A3h), A
+
+ReadNextRomByte:            
+        LD    A, L          ; Установка младшего адреса
+        OUT   (0A1h), A
+        LD    A, H          ; Установка старшего адреса
+        OUT   (0A2h), A
+        IN    A, (0A0h)     ; Чтение данных
+        LD    (BC), A       ; Сохранение в память
+        INC   BC
+        CALL  Iterate_HL_to_DE ; Переход к следующему адресу
+        JP    ReadNextRomByte
+
+; ---------------------------------------------------------------------------
+; Получение/установка свободной памяти (директива A)
+GetFreeMemAddr:             
+        LD    HL, (FreeMemAddr)
+        RET
+
+SetFreeMemAddr:             
+        LD    (FreeMemAddr), HL
+        RET
+
+; ---------------------------------------------------------------------------
+; Установка обработчика (директива H)
+DirectiveHookAdr:           
+        LD    (HookAddress), HL
+        RET
+
+; ---------------------------------------------------------------------------
+; Дамп памяти (директива D)
+DirectiveDump:              
+        CALL  LineFeed      ; Новая строка
+        CALL  PrintHexWord  ; Печать адреса
+
+        PUSH  HL
+        LD    A, L          ; Вычисление отступа
+        AND   0Fh
+        LD    C, A
+        RRA
+        ADD   A, C
+        ADD   A, C
+        ADD   A, 5
+        LD    B, A
+        CALL  sub_FA5A      ; Выравнивание позиции
+
+loc_FA1A:                  
+        LD    A, (HL)       ; Печать HEX-дампа
+        CALL  PrintHexByte
+        CALL  Compare_HL_DE ; Проверка конца диапазона
+        INC   HL
+        JP    Z, loc_FA32   ; Переход к ASCII-дампу
+
+        LD    A, L
+        AND   0Fh
+        PUSH  AF
+        AND   1
+        CALL  Z, PrintBlank ; Пробел после каждого второго байта
+
+        POP   AF
+        JP    NZ, loc_FA1A
+
+loc_FA32:                  
+        POP   HL            ; Восстановление начального адреса
+        LD    A, L
+        AND   0Fh
+        ADD   A, 2Eh        ; Вычисление позиции для ASCII
+        LD    B, A
+        CALL  sub_FA5A      ; Выравнивание
+
+loc_FA3C:                  
+        LD    A, (HL)       ; Печать ASCII-символа
+        CP    7Fh
+        JP    NC, loc_FA47  ; Замена непечатных символов
+
+        CP    20h
+        JP    NC, loc_FA49
+
+loc_FA47:                  
+        LD    A, 2Eh        ; Замена на точку
+loc_FA49:                  
+        CALL  PrintCharfromA
+        CALL  Compare_HL_DE ; Проверка конца диапазона
+        RET  Z
+        INC   HL
+        LD    A, L
+        AND   0Fh
+        JP    NZ, loc_FA3C  ; Продолжить строку
+
+        JP    DirectiveDump ; Новая строка дампа
+
+; ---------------------------------------------------------------------------
+; Выравнивание позиции (B=требуемая позиция)
+sub_FA5A:                   
+        LD    A, (CursorAddress)
+        AND   3Fh
+        CP    B
+        RET  NC             ; Возврат если достигнута позиция
+        CALL  PrintBlank    ; Печать пробела
+        JP    sub_FA5A
+
+; ---------------------------------------------------------------------------
+; Печать пробела
+PrintBlank:                 
+        LD    A, ' '
+        JP    PrintCharfromA
+
+; ---------------------------------------------------------------------------
+; Сравнение областей (директива C)
+DirectiveCompare:           
+        LD    A, (BC)       ; Сравнение байтов
+        CP    (HL)
+        JP    Z, NoDifference ; Совпадают
+
+        CALL  PrintNextLnHexWord ; Печать адреса различия
+        CALL  PrintBytePtrHL ; Печать байта из HL
+        LD    A, (BC)       ; Печать байта из BC
+        CALL  PrintLowHexByte
+
+NoDifference:               
+        INC   BC            ; Следующий байт
+        CALL  Iterate_HL_DE_Brk ; Инкремент HL с проверкой прерывания
+        JP    DirectiveCompare
+
+; ---------------------------------------------------------------------------
+; Заполнение памяти (директива F)
+DirectiveFill:              
+        LD    (HL), C       ; Запись байта
+        CALL  Iterate_HL_to_DE ; Переход к следующему адресу
+        JP    DirectiveFill
+
+; ---------------------------------------------------------------------------
+; Поиск байта (директива S)
+DirectiveSearch:            
+        LD    A, C          ; Сравнение с искомым байтом
+        CP    (HL)
+        CALL  Z, PrintNextLnHexWord ; Печать адреса совпадения
+        CALL  Iterate_HL_DE_Brk ; Переход к следующему адресу
+        JP    DirectiveSearch
+
+; ---------------------------------------------------------------------------
+; Поиск слова (директива W)
+DirectiveSearchWrd:         
+        LD    A, (HL)       ; Сравнение младшего байта
+        CP    C
+        JP    NZ, loc_FAA0
+
+        INC   HL            ; Сравнение старшего байта
+        LD    A, (HL)
+        CP    B
+        DEC   HL
+        CALL  Z, PrintNextLnHexWord ; Печать адреса совпадения
+
+loc_FAA0:                  
+        CALL  Iterate_HL_DE_Brk ; Переход к следующему адресу
+        JP    DirectiveSearchWrd
+
+; ---------------------------------------------------------------------------
+; Копирование памяти (директива T)
+DirectiveCopy:              
+        LD    A, (HL)       ; Чтение байта-источника
+        LD    (BC), A       ; Запись в приемник
+        INC   BC            ; Инкремент приемника
+        CALL  Iterate_HL_to_DE ; Инкремент источника
+        JP    DirectiveCopy
+
+; ---------------------------------------------------------------------------
+; Модификация памяти (директива M)
+DirectiveModify:            
+        CALL  PrintNextLnHexWord ; Печать адреса
+        CALL  PrintBytePtrHL ; Печать текущего байта
+        PUSH  HL            ; Сохранение адреса
+        CALL  InputDirective ; Ввод нового значения
+        POP   HL
+        JP    NC, loc_FAC4  ; Пропуск если ввод пустой
+
+        PUSH  HL
+        CALL  sub_F980      ; Разбор HEX-числа
+        LD    A, L          ; Младший байт результата
+        POP   HL
+        LD    (HL), A       ; Запись нового значения
+
+loc_FAC4:                  
+        INC   HL            ; Следующий адрес
+        JP    DirectiveModify
+
+; ---------------------------------------------------------------------------
+; Запуск программы (директива G)
+DirectiveRun:               
+        CALL  Compare_HL_DE
+        JP    Z, PlainRun   ; Без точки останова
+
+        EX    DE, HL        ; Установка точки останова
+        LD    (RST6_RUN_Var1), HL
+        LD    A, (HL)
+        LD    (RST6_RUN_Var2), A
+        LD    (HL), 0F7h    ; Код инструкции RST 6
+        LD    A, 0C3h       ; Код инструкции JMP
+        LD    (30h), A
+        LD    HL, RST6_handler
+        LD    (31h), HL
+
+PlainRun:                  
+        LD    SP, 0F766h    ; Восстановление регистров
+        POP   BC
+        POP   DE
+        POP   HL
+        POP   AF
+        LD    SP, HL        ; Восстановление SP
+        LD    HL, (RST6_VAR1)
+        JP    JMPcommand    ; Переход по адресу
+
+; ---------------------------------------------------------------------------
+; Обработчик RST 6 (точка останова)
+RST6_handler:               
+        LD    (RST6_VAR1), HL ; Сохранение HL
+        PUSH  AF
+        POP   HL            ; Сохранение AF в HL
+        LD    (RST6_VAR2), HL
+        POP   HL            ; Адрес возврата
+        DEC   HL            ; Корректировка (адрес команды после RST6)
+        LD    (RST6_VAR3), HL
+        LD    HL, 0
+        ADD   HL, SP        ; Текущий SP
+        LD    SP, RST6_VAR2 ; Временный стек
+        PUSH  HL            ; Сохранение SP
+        PUSH  DE            ; Сохранение регистров
+        PUSH  BC
+        LD    SP, 0F800h    ; Восстановление системного стека
+        LD    HL, (RST6_VAR3) ; Адрес останова
+        EX    DE, HL
+        LD    HL, (RST6_RUN_Var1) ; Адрес точки останова
+        CALL  Compare_HL_DE
+        JP    NZ, DirectiveRegisters ; Показ регистров если не совпадает
+
+        ; Восстановление оригинальной команды
+        LD    A, (RST6_RUN_Var2)
+        LD    (HL), A
+
+; ---------------------------------------------------------------------------
+; Отображение регистров (директива X)
+DirectiveRegisters:         
+        LD    HL, RegistersListStr ; "\r\nPC-\r\nHL-\r\nBC-\r\nDE-\r\nSP-\r\nAF-\x19\x19\x19\x19\x19\x19"
+        CALL  PrintString
+
+        LD    HL, RST6_VAR3 ; Начало блока регистров
+        LD    B, 6          ; Количество регистровых пар
+
+loc_FB27:                  
+        LD    E, (HL)       ; Чтение младшего байта
+        INC   HL
+        LD    D, (HL)       ; Чтение старшего байта
+        PUSH  BC
+        PUSH  HL
+        EX    DE, HL
+        CALL  PrintNextLnHexWord ; Печать значения
+
+        CALL  InputDirective ; Ввод нового значения
+        JP    NC, loc_FB3F  ; Пропуск если ввод пустой
+
+        CALL  sub_F980      ; Разбор HEX-числа
+        POP   DE
+        PUSH  DE
+        EX    DE, HL
+        LD    (HL), D       ; Запись старшего байта
+        DEC   HL
+        LD    (HL), E       ; Запись младшего байта
+
+loc_FB3F:                  
+        POP   HL
+        POP   BC
+        DEC   B             ; Следующий регистр
+        INC   HL
+        JP    NZ, loc_FB27
+
+        JP    RK86WarmReset ; Возврат в монитор
+
+; ---------------------------------------------------------------------------
+; Получение позиции курсора
+GetCursorPos:               
+        PUSH  AF
+        LD    HL, (CursorAddress)
+        LD    A, H          ; Вычисление Y-позиции
+        AND   7
+        LD    H, A
+        LD    A, L          ; Вычисление X-позиции
+        AND   3Fh
+        ADD   A, 8
+        ADD   HL, HL        ; Преобразование в экранные координаты
+        ADD   HL, HL
+        INC   H
+        INC   H
+        INC   H
+        LD    L, A
+        POP   AF
+        RET
+
+; ---------------------------------------------------------------------------
+; Чтение видеопамяти (HL=адрес)
+ReadVideoRAM:               
+        PUSH  HL
+        LD    HL, (CursorAddress)
+        LD    A, (HL)       ; Чтение символа
+        POP   HL
+        RET
+
+; ---------------------------------------------------------------------------
+; Калибровка магнитофона (директива H)
+DirectiveTapeConst:         
+        CALL  NextLineAndTab
+        LD    HL, 0FF80h    ; Инициализация счетчика
+        LD    B, 7Bh        ; Количество измерений
+        IN    A, (1)        ; Первое чтение
+        LD    C, A
+
+loc_FB70:                  
+        IN    A, (1)        ; Ожидание изменения сигнала
+        CP    C
+        JP    Z, loc_FB70
+
+loc_FB76:                  
+        LD    C, A
+loc_FB77:                  
+        INC   HL            ; Инкремент счетчика длительности
+        IN    A, (1)
+        CP    C
+        JP    Z, loc_FB77
+
+        DEC   B             ; Следующее измерение
+        JP    NZ, loc_FB76
+
+        ADD   HL, HL        ; Расчет константы
+        LD    A, H
+        ADD   HL, HL
+        ADD   A, H
+        LD    L, A
+        JP    PrintHexWord  ; Печать результата
+
+; ---------------------------------------------------------------------------
+; Чтение с магнитофона (директива I)
+DirectiveTapeInp:           
+        LD    A, (byte_F77B)
+        OR    A
+        JP    Z, loc_FB95
+
+        LD    A, E          ; Установка новой константы
+        LD    (TapeReadConst), A
+
+loc_FB95:                  
+        CALL  TapeReadBlock ; Чтение блока
+        CALL  PrintNextLnHexWord ; Печать адреса начала
+        EX    DE, HL
+        CALL  PrintNextLnHexWord ; Печать адреса конца
+        EX    DE, HL
+        PUSH  BC
+        CALL  CalcChecksum  ; Расчет контрольной суммы
+        LD    H, B
+        LD    L, C
+        CALL  PrintNextLnHexWord ; Печать рассчитанной суммы
+        POP   DE
+        CALL  Compare_HL_DE ; Сравнение с прочитанной
+        RET  Z              ; Возврат если совпадает
+
+        EX    DE, HL
+        CALL  PrintNextLnHexWord ; Печать ошибочной суммы
+SyntaxError:                
+        LD    A, '?'        ; Вывод ошибки
+        CALL  PrintCharfromA
+        JP    ProcessDirective ; Возврат в монитор
+
+; ---------------------------------------------------------------------------
+; Чтение блока с магнитофона
+TapeReadBlock:              
+        LD    A, 0FFh       ; Чтение заголовка
+        CALL  sub_FBDA
+
+        PUSH  HL            ; Сохранение адреса
+        ADD   HL, BC        ; Расчет конечного адреса
+        EX    DE, HL
+        CALL  sub_FBD8       ; Чтение длины блока
+
+        POP   HL            ; Восстановление адреса
+        ADD   HL, BC        ; Расчет нового конца
+        EX    DE, HL
+        IN    A, (5)        ; Проверка флага ошибки
+        AND   4
+        RET  Z              ; Возврат если нет ошибки
+
+        PUSH  HL            ; Чтение блока с обработкой ошибки
+        CALL  sub_FBE5
+
+        LD    A, 0FFh       ; Повторное чтение заголовка
+        CALL  sub_FBDA
+
+        POP   HL            ; Повторное чтение данных
+        RET
+
+; ---------------------------------------------------------------------------
+; Чтение двухбайтового параметра
+sub_FBD8:                   
+        LD    A, 8
+sub_FBDA:                   
+        CALL  TapeReadByte  ; Чтение младшего байта
+        LD    B, A
+        LD    A, 8          ; Чтение старшего байта
+        CALL  TapeReadByte
+        LD    C, A
+        RET
+
+; ---------------------------------------------------------------------------
+; Чтение блока данных
+sub_FBE5:                   
+        LD    A, 8          ; Количество битов
+        CALL  TapeReadByte  ; Чтение байта
+        LD    (HL), A       ; Сохранение
+        CALL  Iterate_HL_to_DE ; Следующий адрес
+        JP    sub_FBE5
+
+; ---------------------------------------------------------------------------
+; Расчет контрольной суммы (HL=начало, DE=конец)
+CalcChecksum:               
+        LD    BC, 0         ; Инициализация суммы
+
+loc_FBF4:                  
+        LD    A, (HL)       ; Суммирование байтов
+        ADD   A, C
+        LD    C, A
+        PUSH  AF
+        CALL  Compare_HL_DE ; Проверка конца блока
+        JP    Z, loc_F9C5   ; Возврат с очисткой стека
+
+        POP   AF
+        LD    A, B
+        ADC   A, (HL)          ; Суммирование с переносом
+        LD    B, A
+        CALL  Iterate_HL_to_DE ; Следующий адрес
+        JP    loc_FBF4
+
+; ---------------------------------------------------------------------------
+; Запись на магнитофон (директива O)
+DirectiveTapeOut:           
+        LD    A, C          ; Проверка константы
+        OR    A
+        JP    Z, loc_FC10
+
+        LD    (TapeWriteConst), A ; Установка новой константы
+
+loc_FC10:                  
+        PUSH  HL
+        CALL  CalcChecksum  ; Расчет контрольной суммы
+        POP   HL
+        CALL  PrintNextLnHexWord ; Печать адреса начала
+        EX    DE, HL
+        CALL  PrintNextLnHexWord ; Печать адреса конца
+        EX    DE, HL
+        PUSH  HL
+        LD    H, B
+        LD    L, C
+        CALL  PrintNextLnHexWord ; Печать контрольной суммы
+        POP   HL
+
+; ---------------------------------------------------------------------------
+; Запись блока на магнитофон
+TapeWriteBlock:             
+        PUSH  BC            ; Сохранение контрольной суммы
+        LD    BC, 0         ; Формирование преамбулы
+
+loc_FC28:                  
+        CALL  TapeWriteByte ; Запись нулевых байтов
+        DEC   B
+        EX    (SP), HL      ; Задержка
+        EX    (SP), HL
+        JP    NZ, loc_FC28
+
+        LD    C, 0E6h       ; Маркер начала данных
+        CALL  TapeWriteByte
+        CALL  sub_FC6C      ; Запись адреса начала
+
+        EX    DE, HL
+        CALL  sub_FC6C      ; Запись адреса конца
+        EX    DE, HL
+        CALL  sub_FC62      ; Запись данных
+
+        LD    HL, 0         ; Формирование пост-амбулы
+        CALL  sub_FC6C
+        LD    C, 0E6h       ; Маркер конца данных
+        CALL  TapeWriteByte
+
+        POP   HL            ; Запись контрольной суммы
+        CALL  sub_FC6C
+        RET
+
+; ---------------------------------------------------------------------------
+; Печать адреса с новой строки
+PrintNextLnHexWord:         
+        PUSH  BC
+        CALL  NextLineAndTab
+        CALL  PrintHexWord
+        POP   BC
+        RET
+
+; ---------------------------------------------------------------------------
+; Печать слова в HEX (HL=слово)
+PrintHexWord:               
+        LD    A, H          ; Печать старшего байта
+        CALL  PrintHexByte
+        LD    A, L          ; Печать младшего байта
+        JP    PrintLowHexByte
+
+; ---------------------------------------------------------------------------
+; Запись блока данных на ленту
+sub_FC62:                   
+        LD    C, (HL)       ; Чтение байта
+        CALL  TapeWriteByte ; Запись
+        CALL  Iterate_HL_to_DE ; Следующий адрес
+        JP    sub_FC62
+
+; ---------------------------------------------------------------------------
+; Запись слова на ленту (HL=слово)
+sub_FC6C:                   
+        LD    C, H          ; Запись старшего байта
+        CALL  TapeWriteByte
+        LD    C, L          ; Запись младшего байта
+        JP    TapeWriteByte
+
+; ===========================================================================
+; Работа с магнитофоном
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; Чтение байта с магнитофона (A=количество битов)
+TapeReadByte:               
+        PUSH  HL
+        PUSH  BC
+        PUSH  DE
+        LD    D, A          ; Сохранение счетчика битов
+
+loc_FC78:                  
+        LD    C, 0          ; Очистка принимаемого байта
+        IN    A, (1)        ; Чтение начального уровня
+        AND   1
+        LD    E, A          ; Сохранение уровня
+
+loc_FC7F:                  
+        LD    A, C          ; Подготовка к приему бита
+        AND   7Fh
+        RLCA
+        LD    C, A
+        LD    H, 0          ; Счетчик таймаута
+
+loc_FC86:                  
+        DEC   H             ; Ожидание изменения сигнала
+        JP    Z, loc_FCD2   ; Таймаут
+
+        IN    A, (1)
+        AND   1
+        CP    E             ; Сравнение с предыдущим уровнем
+        JP    Z, loc_FC86   ; Ожидание изменения
+
+        OR    C             ; Добавление бита в байт
+        LD    C, A
+        DEC   D             ; Уменьшение счетчика битов
+        LD    A, (TapeReadConst) ; Загрузка константы ожидания
+        JP    NZ, loc_FC9D  ; Корректировка для последнего бита
+
+        SUB   12h           ; Уменьшение задержки
+
+loc_FC9D:                  
+        LD    B, A
+loc_FC9E:                  
+        DEC   B             ; Задержка
+        JP    NZ, loc_FC9E
+
+        INC   D             ; Восстановление счетчика (псевдо-инкремент)
+        IN    A, (1)        ; Обновление текущего уровня
+        AND   1
+        LD    E, A
+        LD    A, D
+        OR    A
+        JP    P, loc_FCC6   ; Проверка на завершение
+
+        ; Обработка служебных байтов
+        LD    A, C
+        CP    0E6h          ; Маркер начала данных
+        JP    NZ, loc_FCBA
+
+        XOR   A             ; Установка флага данных
+        LD    (TapeReadVAR), A
+        JP    loc_FCC4
+
+loc_FCBA:                  
+        CP    19h           ; Маркер конца данных
+        JP    NZ, loc_FC7F
+
+        LD    A, 0FFh       ; Установка флага конца
+        LD    (TapeReadVAR), A
+
+loc_FCC4:                  
+        LD    D, 9          ; Установка счетчика битов
+
+loc_FCC6:                  
+        DEC   D
+        JP    NZ, loc_FC7F  ; Прием следующего бита
+
+        ; Проверка контрольной суммы
+        LD    A, (TapeReadVAR)
+        XOR   C             ; Сравнение с ожидаемым маркером
+        POP   DE
+        POP   BC
+        POP   HL
+        RET
+
+loc_FCD2:                  
+        LD    A, D          ; Проверка таймаута
+        OR    A
+        JP    P, SyntaxError ; Ошибка если в процессе приема
+
+        CALL  CheckBreakByKbrd ; Проверка прерывания
+        JP    loc_FC78      ; Повтор
+
+; ---------------------------------------------------------------------------
+; Запись байта на магнитофон (C=байт)
+TapeWriteByte:              
+        PUSH  BC
+        PUSH  DE
+        PUSH  AF
+        LD    D, 8          ; Счетчик битов
+
+loc_FCE2:                  
+        LD    A, C          ; Подготовка бита
+        RLCA
+        LD    C, A
+        LD    A, 1          ; Формирование выходного бита
+        XOR   C
+        OUT   (1), A        ; Запись бита
+        LD    A, (TapeWriteConst) ; Задержка
+        LD    B, A
+
+loc_FCEE:                  
+        DEC   B
+        JP    NZ, loc_FCEE
+
+        LD    A, 0          ; Возврат к базовому уровню
+        XOR   C
+        OUT   (1), A
+        DEC   D             ; Корректировка задержки для последнего бита
+        LD    A, (TapeWriteConst)
+        JP    NZ, loc_FD00
+
+        SUB   0Eh
+
+loc_FD00:                  
+        LD    B, A
+loc_FD01:                  
+        DEC   B             ; Задержка
+        JP    NZ, loc_FD01
+
+        INC   D             ; Псевдо-инкремент счетчика
+        DEC   D             ; Проверка завершения
+        JP    NZ, loc_FCE2  ; Следующий бит
+
+        POP   AF
+        POP   DE
+        POP   BC
+        RET
+
+; ===========================================================================
+; Функции ввода/вывода
+; ===========================================================================
+
+; ---------------------------------------------------------------------------
+; Печать байта в HEX (A=байт)
+PrintHexByte:               
+        PUSH  AF            ; Сохранение байта
+        RRCA                 ; Преобразование старшей тетрады
+        RRCA
+        RRCA
+        RRCA
+        CALL  sub_FD17      ; Печать тетрады
+        POP   AF            ; Печать младшей тетрады
+
+sub_FD17:                   
+        AND   0Fh           ; Изоляция тетрады
+        CP    0Ah
+        JP    M, loc_FD20   ; Цифра 0-9
+
+        ADD   A, 7          ; Коррекция для A-F
+
+loc_FD20:                  
+        ADD   A, 30h        ; Преобразование в ASCII
+
+; ---------------------------------------------------------------------------
+; Печать символа из регистра A
+PrintCharfromA:             
+        LD    C, A
+
+; ---------------------------------------------------------------------------
+; Печать символа из регистра C (основная функция вывода)
+PrintCharFromC:             
+        PUSH  AF
+        PUSH  BC
+        PUSH  DE
+        PUSH  HL
+        CALL  GetKeyboardStatus ; Проверка клавиатуры (результат не используется)
+
+        ; Скрытие курсора
+        LD    B, 0
+        CALL  ShowHideCursor
+
+        LD    HL, (CursorAddress)
+        LD    A, (EscSequenceState)
+        DEC   A
+        JP    M, NotInEscSequence ; Обработка если не в ESC-последовательности
+
+        JP    Z, CheckIf59escCode ; Обработка после ESC
+
+        DEC   A
+        JP    NZ, ProcessEsc59ArgX ; Обработка второго аргумента ESC Y
+
+        ; Обработка аргумента Y для ESC Y
+        LD    A, C
+        SUB   20h           ; Коррекция Y
+        JP    P, CheckUpBound
+
+        XOR   A             ; Ограничение снизу Y=0
+        JP    ConvertYtoVideoAddr
+
+CheckUpBound:               
+        CP    ScreenHeight  ; Ограничение сверху
+        JP    M, ConvertYtoVideoAddr
+
+        LD    A, ScreenHeight-1
+
+ConvertYtoVideoAddr:        
+        RRCA                 ; Преобразование Y в адрес видеопамяти
+        RRCA
+        LD    C, A
+        AND   0C0h
+        LD    B, A
+        LD    A, L
+        AND   3Fh
+        OR    B
+        LD    L, A
+        LD    A, C
+        AND   7
+        LD    B, A
+        LD    A, H
+        AND   0F8h
+        OR    B
+        LD    H, A
+        LD    A, 3          ; Ожидание второго аргумента X
+;        JP    UpdateEscCurPsState
+
+; ---------------------------------------------------------------------------
+UpdateEscCurPsState:
+        LD    (EscSequenceState), A
+
+; ---------------------------------------------------------------------------
+; Обновление позиции курсора
+UpdCurPosAndReturn:         
+        LD    (CursorAddress), HL
+
+; ---------------------------------------------------------------------------
+; Отображение курсора
+ShowCursorAndReturn:        
+        LD    B, 0FFh       ; Показать курсор
+        CALL  ShowHideCursor
+
+        POP   HL
+        POP   DE
+        POP   BC
+        POP   AF
+        RET
+
+; ---------------------------------------------------------------------------
+; Управление отображением курсора (B=00-скрыть, FF-показать)
+ShowHideCursor:             
+        LD    A, (CursorVisible)
+        OR    A
+        RET  Z              ; Выход если курсор скрыт
+        LD    HL, (CursorAddress)
+        LD    DE, 0F801h    ; Смещение в буфер курсора
+        ADD   HL, DE
+        LD    (HL), B       ; Установка флага видимости
+        RET
+
+; ---------------------------------------------------------------------------
+; Обработка первого аргумента ESC Y
+ProcessEsc59ArgX:           
+        LD    A, C
+        SUB   20h           ; Коррекция X
+        JP    P, CheckRightBound
+
+        XOR   A             ; Ограничение слева X=0
+        JP    ConvertXToVideoAddr
+
+CheckRightBound:            
+        CP    ScreenWidth   ; Ограничение справа
+        JP    M, ConvertXToVideoAddr
+
+        LD    A, ScreenWidth-1
+
+ConvertXToVideoAddr:        
+        LD    B, A
+        LD    A, L
+        AND   0C0h
+        OR    B
+        LD    L, A
+
+; ---------------------------------------------------------------------------
+; Завершение ESC-последовательности
+EndEscSequence:             
+        XOR   A             ; Сброс состояния ESC
+        JP    UpdateEscCurPsState
+
+; ---------------------------------------------------------------------------
+; Проверка кода после ESC
+CheckIf59escCode:           
+        LD    A, C
+        CP    59h           ; ESC Y (установка позиции)?
+        JP    NZ, CheckIf61escCode
+
+        LD    A, 2          ; Ожидание аргумента Y
+        JP    UpdateEscCurPsState
+
+CheckIf61escCode:           
+        CP    61h           ; ESC a (скрыть курсор)?
+        JP    NZ, CheckIf62escCode
+
+        XOR   A             ; Установка флага скрытия
+        JP    UpdateEsc6162
+
+CheckIf62escCode:           
+        CP    62h           ; ESC b (показать курсор)?
+        JP    NZ, EndEscSequence
+
+UpdateEsc6162:              
+        LD    (CursorVisible), A
+        JP    EndEscSequence
+
+; ---------------------------------------------------------------------------
+; Обработка обычных символов
+NotInEscSequence:           
+        IN    A, (5)        ; Проверка клавиш
+        AND   6             ; Маска клавиш "'"+CC"
+        JP    Z, NotInEscSequence ; Ожидание отпускания
+
+        LD    A, 10h        ; Проверка на ESC-код 10h
+        CP    C
+        LD    A, (HookActive)
+        JP    NZ, GoHookAndPrint
+
+        CPL                 ; Инверсия флага активности
+        LD    (HookActive), A
+        JP    UpdCurPosAndReturn
+
+; ---------------------------------------------------------------------------
+; Вызов обработчика и печать
+GoHookAndPrint:             
+        OR    A
+        CALL  NZ, HookJmp   ; Вызов обработчика если активен
+
+        LD    A, C          ; Проверка управляющих символов
+        CP    1Fh
+        JP    Z, DoClearScreen
+
+        JP    M, ProcessEscCodes ; Обработка ESC-кодов
+
+; ---------------------------------------------------------------------------
+; Печать обычного символа
+DoPrintChar:                
+        LD    (HL), A       ; Запись символа в видеопамять
+        INC   HL            ; Следующая позиция
+        LD    A, H
+        CP    SymbolBufEndHI ; Проверка конца экрана
+        JP    M, UpdCurPosAndReturn
+
+        CALL  LineFeed      ; Скроллинг экрана
+        JP    ShowCursorAndReturn
+
+; ---------------------------------------------------------------------------
+; Очистка экрана (ESC 1Fh)
+DoClearScreen:              
+        LD    B, ' '        ; Символ пробела
+        LD    A, 0F0h       ; Верхняя граница видеопамяти
+        LD    HL, CursorBufferStart
+
+ClearNextScrPos:            
+        LD    (HL), B       ; Очистка буфера курсора
+        INC   HL
+        LD    (HL), B       ; Очистка буфера символов
+        INC   HL
+        CP    H             ; Проверка достижения конца
+        JP    NZ, ClearNextScrPos
+
+; ---------------------------------------------------------------------------
+; Установка курсора в домашнюю позицию (ESC 0Ch)
+DoCursorHome:               
+        LD    HL, SymbolBufferStart
+        JP    UpdCurPosAndReturn
+
+; ---------------------------------------------------------------------------
+; Обработка управляющих кодов
+ProcessEscCodes:            
+        CP    0Ch           ; Home
+        JP    Z, DoCursorHome
+
+        CP    0Dh           ; Return
+        JP    Z, DoReturn
+
+        CP    0Ah           ; LineFeed
+        JP    Z, DoLineFeed
+
+        CP    8             ; Left
+        JP    Z, DoCursorLeft
+
+        CP    18h           ; Right
+        JP    Z, DoCursorRight
+
+        CP    19h           ; Up
+        JP    Z, DoCursorUp
+
+        CP    7             ; Bell
+        JP    Z, DoBeep
+
+        CP    1Ah           ; Down
+        JP    Z, DoCursorDown
+
+        CP    1Bh           ; ESC
+        JP    NZ, DoPrintChar
+
+        ; Начало ESC-последовательности
+        LD    A, 1          ; Установка состояния ESC
+        JP    UpdateEscCurPsState
+
+; ---------------------------------------------------------------------------
+; Звуковой сигнал
+DoBeep:                     
+        LD    C, 80h        ; Длительность сигнала
+        LD    E, 20h        ; Частота
+
+WaweRepeat:                 
+        LD    D, E          ; Сохранение частоты
+
+DelayLoop1:                 
+        LD    A, 0Fh        ; Включение звука
+        OUT   (4), A
+        DEC   E             ; Задержка
+        JP    NZ, DelayLoop1
+
+        LD    E, D          ; Восстановление частоты
+
+DelayLoop2:                 
+        LD    A, 0Eh        ; Выключение звука
+        OUT   (4), A
+        DEC   D             ; Задержка
+        JP    NZ, DelayLoop2
+
+        DEC   C             ; Следующий полупериод
+        JP    NZ, WaweRepeat
+
+        JP    ShowCursorAndReturn
+
+; ---------------------------------------------------------------------------
+; Возврат каретки
+DoReturn:                   
+        LD    A, L          ; Сброс X-координаты
+        AND   0C0h
+        LD    L, A
+        JP    UpdCurPosAndReturn
+
+; ---------------------------------------------------------------------------
+; Курсор вправо
+DoCursorRight:              
+        INC   HL
+CheckVertBoundary:          
+        LD    A, H          ; Проверка границы экрана по Y
+        AND   7
+        OR    (SymbolBufferStart & 0FF00H) >> 8
+        LD    H, A
+        JP    UpdCurPosAndReturn
+
+; ---------------------------------------------------------------------------
+; Курсор влево
+DoCursorLeft:               
+        DEC   HL
+        JP    CheckVertBoundary
+
+; ---------------------------------------------------------------------------
+; Перевод строки
+DoLineFeed:                 
+        LD    BC, ScreenWidth ; Смещение на строку вниз
+        ADD   HL, BC
+        LD    A, H
+        CP    SymbolBufEndHI ; Проверка нижней границы
+        JP    M, UpdCurPosAndReturn
+
+        ; Скроллинг экрана вверх
+        LD    HL, SymbolBufferStart
+        LD    BC, SymbolBufferStart+ScreenWidth
+
+ContinueScroll:             
+        LD    A, (BC)       ; Чтение символа снизу
+        LD    (HL), A       ; Запись на текущую позицию
+        INC   HL
+        INC   BC
+        LD    A, (BC)
+        LD    (HL), A
+        INC   HL
+        INC   BC
+        LD    A, B          ; Проверка конца экрана
+        CP    SymbolBufEndHI
+        JP    M, ContinueScroll
+
+        ; Очистка последней строки
+        LD    A, SymbolBufEndHI
+        LD    C, ' '
+
+ClearLastLine:              
+        LD    (HL), C       ; Очистка символа
+        INC   HL
+        LD    (HL), C       ; Очистка атрибута
+        INC   HL
+        CP    H             ; Проверка конца
+        JP    NZ, ClearLastLine
+
+        ; Установка курсора в начало последней строки
+        LD    HL, (CursorAddress)
+        LD    H, SymbolBufEndHI-1
+        LD    A, L
+        OR    0C0h          ; Сохранение X-позиции
+        LD    L, A
+        JP    UpdCurPosAndReturn
+
+; ---------------------------------------------------------------------------
+; Курсор вверх
+DoCursorUp:                 
+        LD    BC, -ScreenWidth ; Смещение на строку вверх
+AddBXtoHL:                  
+        ADD   HL, BC
+        JP    CheckVertBoundary
+
+; ---------------------------------------------------------------------------
+; Курсор вниз
+DoCursorDown:               
+        LD    BC, ScreenWidth
+        JP    AddBXtoHL
+
+; ---------------------------------------------------------------------------
+; Перевод строки (CR+LF)
+LineFeed:                   
+        LD    C, 0Dh        ; Возврат каретки
+        CALL  PrintCharFromC
+        LD    C, 0Ah        ; Перевод строки
+        JP    PrintCharFromC
+
+; ---------------------------------------------------------------------------
+; Проверка состояния клавиатуры
+GetKeyboardStatus:          
+        XOR   A             ; Сброс клавиатуры
+        OUT   (7), A
+        IN    A, (6)        ; Чтение состояния
+        AND   7Fh           ; Игнорирование старшего бита
+        CP    7Fh           ; Проверка нажатия
+        JP    NZ, KeyIsPressed
+
+        XOR   A             ; Клавиша не нажата
+        RET
+
+KeyIsPressed:               
+        LD    A, 0FFh       ; Клавиша нажата
+        RET
+
+; ---------------------------------------------------------------------------
+; Ввод символа с клавиатуры
+InputSymbol:                
+        PUSH  HL
+        LD    HL, (LastKeyStatus) ; H=последняя клавиша, L=счетчик автоповтора
+        CALL  WaitKeyStateChange ; Ожидание изменения состояния
+
+        LD    L, 20h        ; Задержка перед автоповтором
+        JP    Z, Autorepeat  ; Если клавиша удерживается
+
+loc_FED4:                  
+        LD    L, 2          ; Задержка перед первым повтором
+        CALL  WaitKeyStateChange
+
+        JP    NZ, loc_FED4  ; Ожидание отпускания
+
+        CP    80h           ; Проверка на управляющий символ
+        JP    NC, loc_FED4  ; Игнорирование
+
+        LD    L, 80h        ; Задержка автоповтора
+
+Autorepeat:                 
+        LD    (LastKeyStatus), HL ; Сохранение состояния
+        POP   HL
+        RET
+
+; ---------------------------------------------------------------------------
+; Ожидание изменения состояния клавиатуры
+WaitKeyStateChange:         
+        CALL  ReadKeyCode   ; Чтение текущей клавиши
+        CP    H             ; Сравнение с предыдущей
+        JP    NZ, KeyStateChanged ; Изменилось
+
+        PUSH  AF            ; Короткая задержка
+        XOR   A
+DoDelay:                    
+        EX    DE, HL
+        EX    DE, HL
+        DEC   A
+        JP    NZ, DoDelay
+
+        POP   AF
+        DEC   L             ; Уменьшение счетчика
+        JP    NZ, WaitKeyStateChange
+
+; ---------------------------------------------------------------------------
+; Изменение состояния клавиши
+KeyStateChanged:            
+        LD    H, A          ; Сохранение новой клавиши
+        RET
+
+; ---------------------------------------------------------------------------
+; Чтение кода клавиши
+ReadKeyCode:                
+        PUSH  BC
+        PUSH  DE
+        PUSH  HL
+        LD    BC, 0FEh      ; Начальная маска строк
+        LD    D, 8          ; Количество строк
+
+loc_FF06:                  
+        LD    A, C          ; Активация строки
+        OUT   (7), A
+        RLCA                 ; Сдвиг маски
+        LD    C, A
+        IN    A, (6)        ; Чтение столбцов
+        AND   7Fh           ; Игнорирование старшего бита
+        CP    7Fh           ; Проверка нажатия
+        JP    NZ, loc_FF28  ; Нажатие обнаружено
+
+        ; Переход к следующей строке
+        LD    A, B
+        ADD   A, 7          ; Смещение кода
+        LD    B, A
+        DEC   D
+        JP    NZ, loc_FF06
+
+        ; Проверка клавиши СТОП
+        IN    A, (5)
+        RRA                 ; Проверка бита СТОП
+        LD    A, 0FFh
+        JP    C, ReturnFromReadKey ; Нажата СТОП
+
+        DEC   A             ; Код СТОП = FEh
+        JP    ReturnFromReadKey
+
+loc_FF28:                  
+        ; Определение нажатой клавиши в строке
+        RRA                 ; Проверка бита
+        JP    NC, loc_FF30  ; Переход если бит=0
+        INC   B             ; Следующий столбец
+        JP    loc_FF28
+
+loc_FF30:                  
+        LD    A, B          ; Преобразование в ASCII
+        CP    30h           ; Проверка диапазона
+        JP    NC, GenerateEscCode ; Управляющие клавиши
+
+        ADD   A, 30h        ; Коррекция цифр
+        CP    3Ch           ; Проверка на буквы
+        JP    C, loc_FF44
+
+        CP    40h
+        JP    NC, loc_FF44
+        AND   2Fh           ; Коррекция A-Z
+
+loc_FF44:                  
+        CP    5Fh           ; Проверка на символ '_'
+        JP    NZ, loc_FF4B
+        LD    A, 7Fh        ; Замена на DEL
+
+loc_FF4B:                  
+        LD    C, A          ; Сохранение кода
+        IN    A, (5)        ; Проверка модификаторов
+        AND   7
+        CP    7
+        LD    B, A
+        LD    A, C
+        JP    Z, ReturnFromReadKey ; Без модификаторов
+
+        LD    A, B
+        RRA
+        RRA
+        JP    NC, loc_FF68  ; Обработка SHIFT
+
+        RRA
+        JP    NC, loc_FF6E  ; Обработка CTRL
+
+        LD    A, C
+        OR    20h           ; Перевод в нижний регистр
+
+;        JP    ReturnFromReadKey
+; ---------------------------------------------------------------------------
+; Возврат из чтения клавиши
+ReturnFromReadKey:          
+        POP   HL
+        POP   DE
+        POP   BC
+        RET
+
+loc_FF68:                  
+        LD    A, C
+        AND   1Fh           ; Управляющие символы
+        JP    ReturnFromReadKey
+
+loc_FF6E:                  
+        LD    A, C
+        CP    7Fh           ; Замена DEL на '_'
+        JP    NZ, loc_FF76
+        LD    A, 5Fh
+
+loc_FF76:                  
+        CP    40h           ; Обработка букв под CTRL
+        JP    NC, ReturnFromReadKey
+        CP    30h
+        JP    NC, loc_FF85
+        OR    10h           ; Коррекция CTRL+0-9
+        JP    ReturnFromReadKey
+
+loc_FF85:                  
+        AND   2Fh           ; Коррекция CTRL+A-Z
+        JP    ReturnFromReadKey
+
+; ---------------------------------------------------------------------------
+; Генерация ESC-кодов для управляющих клавиш
+GenerateEscCode:            
+        LD    HL, ESCcodesMap
+        SUB   30h           ; Индекс в таблице
+        LD    C, A
+        LD    B, 0
+        ADD   HL, BC
+        LD    A, (HL)       ; Загрузка ESC-кода
+        JP    ReturnFromReadKey
+
+
+; ===========================================================================
+; Данные
+; ===========================================================================
+
+; Таблица ESC-кодов для управляющих клавиш
+ESCcodesMap:    DB  20h     ; Space
+        DB  18h             ; Right
+        DB    8             ; Left
+        DB  19h             ; Up
+        DB  1Ah             ; Down
+        DB  0Dh             ; Enter
+        DB  1Fh             ; Clear
+        DB  0Ch             ; Home
+
+; Строковые константы
+DirectivePrompt:DB 0Dh, 0Ah ; Приглашение ввода
+        DB "-->"
+        DB 0
+
+NextLineAndTabStr:DB 0Dh, 0Ah, 18h, 18h, 18h, 0 ; Новая строка и табуляция
+
+RegistersListStr:DB 0Dh, 0Ah ; Список регистров
+        DB "PC-"
+        DB 0Dh, 0Ah
+        DB "HL-"
+        DB 0Dh, 0Ah
+        DB "BC-"
+        DB 0Dh, 0Ah
+        DB "DE-"
+        DB 0Dh, 0Ah
+        DB "SP-"
+        DB 0Dh, 0Ah
+        DB "AF-"
+        DB 19h, 19h, 19h, 19h, 19h, 19h, 0
+
+BackspaceStr:   DB 8        ; Строка Backspace
+        DB " "
+        DB 8, 0
+
+WelcomeMsg:     DB 1Fh, 0Ah ; Приветственное сообщение
+        DB "m/80k "
+        DB 0
+
+; Заглушка обработчика
+DummyHook:      DB 0C9h     ; RET
+
+        DB 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+        DB 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+        DB 0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+        DB 0FFh,0FFh,0FFh,0FFh
+
+; Конец ROM
+        END
